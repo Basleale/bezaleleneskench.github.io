@@ -42,7 +42,6 @@
     "@vercel/kv": "latest",
     "@vercel/postgres": "latest",
     "autoprefixer": "^10.4.20",
-    "bcryptjs": "latest",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "latest",

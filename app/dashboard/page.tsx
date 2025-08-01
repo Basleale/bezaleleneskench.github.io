@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useSession, signOut } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 import { Search, Upload, ExternalLink, Download, Tag, X, Camera, Video, Loader2, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,7 +12,6 @@ import { UploadProgress } from "@/components/upload-progress"
 import { useMedia } from "@/hooks/use-media"
 import Link from "next/link"
 import { TaggingModal } from "@/components/tagging-modal"
-import { signOut, useSession } from "next-auth/react"
 
 const quickAccessUsers = [
   { id: "bas", name: "Bas", initials: "BA" },
@@ -22,40 +22,35 @@ const quickAccessUsers = [
 ]
 
 export default function DashboardPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
   const [expandedMedia, setExpandedMedia] = useState<any>(null)
   const [uploadProgress, setUploadProgress] = useState<{ name: string; progress: number }[]>([])
   const [taggingMedia, setTaggingMedia] = useState<any>(null)
-  const [user, setUser] = useState<any>(null)
   const { media, loading, uploadFiles, updateTags } = useMedia()
   const { toast } = useToast()
-  const router = useRouter()
-  const { data: session } = useSession()
 
   useEffect(() => {
-    // Check authentication
-    const localUser = localStorage.getItem("user")
-    if (localUser) {
-      setUser(JSON.parse(localUser))
-    } else if (session?.user) {
-      setUser(session.user)
-    } else {
+    if (status === "unauthenticated") {
       router.push("/")
     }
-  }, [router, session])
+  }, [status, router])
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-800 to-red-950 flex items-center justify-center">
+        <div className="text-white text-xl">Loading...</div>
+      </div>
+    )
+  }
+
+  if (!session) {
+    return null
+  }
 
   const handleLogout = async () => {
-    // Clear local storage
-    localStorage.removeItem("user")
-    localStorage.removeItem("users")
-
-    // Sign out from NextAuth if using Google
-    if (session) {
-      await signOut({ redirect: false })
-    }
-
-    // Redirect to home
-    router.push("/")
+    await signOut({ callbackUrl: "/" })
   }
 
   const handleUpload = () => {
@@ -67,12 +62,10 @@ export default function DashboardPage() {
       const files = Array.from((e.target as HTMLInputElement).files || [])
       if (files.length === 0) return
 
-      // Initialize progress tracking
       const progressFiles = files.map((file) => ({ name: file.name, progress: 0 }))
       setUploadProgress(progressFiles)
 
       try {
-        // Simulate progress (in real implementation, you'd track actual upload progress)
         const progressInterval = setInterval(() => {
           setUploadProgress((prev) =>
             prev.map((file) => ({
@@ -142,7 +135,6 @@ export default function DashboardPage() {
       ),
   )
 
-  // Show only the 3 most recent items on home page
   const recentMedia = filteredMedia.slice(0, 3)
 
   const handleTagsUpdate = async (mediaId: string, tags: string[]) => {
@@ -159,14 +151,6 @@ export default function DashboardPage() {
         variant: "destructive",
       })
     }
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-800 to-red-950 flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
-      </div>
-    )
   }
 
   return (
@@ -195,7 +179,7 @@ export default function DashboardPage() {
           </Link>
 
           <div className="flex items-center gap-2 text-white">
-            <span className="text-sm">Welcome, {user.name || user.email}</span>
+            <span>Welcome, {session.user?.name || session.user?.email}</span>
             <Button
               onClick={handleLogout}
               variant="outline"
@@ -275,7 +259,6 @@ export default function DashboardPage() {
                           alt={mediaItem.name}
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            // Fallback to placeholder if image fails to load
                             const target = e.target as HTMLImageElement
                             target.style.display = "none"
                             target.nextElementSibling?.classList.remove("hidden")
@@ -286,7 +269,6 @@ export default function DashboardPage() {
                           src={mediaItem.url}
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            // Fallback to placeholder if video fails to load
                             const target = e.target as HTMLVideoElement
                             target.style.display = "none"
                             target.nextElementSibling?.classList.remove("hidden")
@@ -294,7 +276,6 @@ export default function DashboardPage() {
                         />
                       )}
 
-                      {/* Fallback placeholder */}
                       <div className="hidden w-full h-full bg-gradient-to-br from-gray-800 via-slate-700 to-gray-900 flex items-center justify-center absolute inset-0">
                         {mediaItem.type === "image" ? (
                           <div className="text-center">
@@ -318,7 +299,6 @@ export default function DashboardPage() {
                       )}
                     </div>
 
-                    {/* Bottom buttons */}
                     <div className="p-3 flex items-center justify-between">
                       <Button
                         onClick={(e) => {
@@ -379,10 +359,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Upload Progress */}
       <UploadProgress files={uploadProgress} />
 
-      {/* Fullscreen Media Modal */}
       {expandedMedia && (
         <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
           <div className="relative max-w-4xl max-h-full">
@@ -416,6 +394,7 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
       <TaggingModal
         isOpen={!!taggingMedia}
         onClose={() => setTaggingMedia(null)}

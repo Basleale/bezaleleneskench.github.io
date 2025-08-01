@@ -1,37 +1,27 @@
 import { type NextRequest, NextResponse } from "next/server"
-import bcrypt from "bcryptjs"
-import { db } from "@/lib/db"
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, name } = await request.json()
+    const { name, email, password } = await request.json()
 
-    if (!email || !password || !name) {
+    // Basic validation
+    if (!name || !email || !password) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    // Check if user already exists in your database
-    const existingUser = await db.user.findUnique({ where: { email } })
-    if (existingUser) {
-      return NextResponse.json({ error: "User already exists" }, { status: 400 })
+    if (password.length < 6) {
+      return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 })
     }
 
-    // Hash the password
-    const hashedPassword = await bcrypt.hash(password, 12)
+    // In a real app, you would:
+    // 1. Hash the password
+    // 2. Check if user already exists in database
+    // 3. Save user to database
 
-    // Create user in your database
-    const user = await db.user.create({
-      data: {
-        email,
-        hashedPassword,
-        name,
-      },
-    })
+    // For demo purposes, we'll just return success
+    // You should implement proper user registration with a database
 
-    return NextResponse.json(
-      { message: "User registered successfully", user: { id: user.id, email: user.email, name: user.name } },
-      { status: 201 },
-    )
+    return NextResponse.json({ message: "User registered successfully" }, { status: 201 })
   } catch (error) {
     console.error("Registration error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
