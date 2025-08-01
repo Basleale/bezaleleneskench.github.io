@@ -1,22 +1,20 @@
 "use client"
 
 import type React from "react"
+
 import { useState } from "react"
 import { signIn } from "next-auth/react"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Eye, EyeOff, Mail, Lock, User, Menu } from "lucide-react"
+import { Label } from "@/components/ui/label"
+import { Eye, EyeOff, User } from "lucide-react"
 
-export default function AuthForm() {
+export function AuthForm() {
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [error, setError] = useState("")
-  const router = useRouter()
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -35,12 +33,10 @@ export default function AuthForm() {
       })
 
       if (result?.error) {
-        setError("Invalid email or password")
-      } else if (result?.ok) {
-        router.push("/dashboard")
+        setError("Invalid credentials. Please try again.")
       }
     } catch (error) {
-      setError("An error occurred during sign in")
+      setError("An error occurred. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -52,233 +48,164 @@ export default function AuthForm() {
     setError("")
 
     const formData = new FormData(e.currentTarget)
-    const name = formData.get("name") as string
     const email = formData.get("email") as string
     const password = formData.get("password") as string
-    const confirmPassword = formData.get("confirmPassword") as string
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match")
-      setIsLoading(false)
-      return
-    }
-
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters")
-      setIsLoading(false)
-      return
-    }
 
     try {
-      // For demo purposes, we'll just simulate registration
-      // In production, you'd call your registration API
-      setError("Registration successful! Please sign in.")
+      const response = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      })
 
-      // Switch to sign in tab
-      const signinTab = document.querySelector('[value="signin"]') as HTMLElement
-      signinTab?.click()
+      if (response.ok) {
+        // Auto sign in after successful registration
+        await signIn("credentials", {
+          email,
+          password,
+          redirect: false,
+        })
+      } else {
+        setError("Registration failed. Please try again.")
+      }
     } catch (error) {
-      setError("An error occurred during registration")
+      setError("An error occurred. Please try again.")
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-800 to-red-950">
-      {/* Header */}
-      <header className="flex items-center justify-between p-4 border-b border-gray-700">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" className="text-white hover:bg-gray-800">
-            <Menu className="h-5 w-5" />
-          </Button>
+    <div className="min-h-screen flex items-center justify-center bg-slate-900 p-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center mb-4">
+            <User className="h-8 w-8 text-white mr-2" />
+          </div>
+          <h1 className="text-3xl font-bold text-white mb-2">ENESKENCH SUMMIT</h1>
+          <p className="text-slate-400">Your Digital Universe</p>
+          <p className="text-sm text-slate-500 mt-2">
+            Discover, collect, and share extraordinary visual art from around the globe.
+          </p>
         </div>
 
-        <h1 className="text-xl font-bold tracking-wider text-white">ENESKENCH SUMMIT</h1>
-
-        <Button variant="ghost" size="icon" className="text-white hover:bg-gray-800">
-          <User className="h-5 w-5" />
-        </Button>
-      </header>
-
-      {/* Auth Content */}
-      <div className="flex items-center justify-center min-h-[calc(100vh-80px)] p-4">
-        <Card className="w-full max-w-md bg-gray-800/50 border-gray-700">
-          <CardHeader className="text-center">
-            <CardTitle className="text-3xl font-bold text-white mb-2">Your Digital Universe</CardTitle>
-            <CardDescription className="text-gray-300">
-              Discover, collect, and share extraordinary visual art from around the globe.
+        <Card className="bg-slate-800 border-slate-700">
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-2xl text-center text-white">Welcome</CardTitle>
+            <CardDescription className="text-center text-slate-400">
+              Sign in to your account or create a new one
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="signin" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 bg-gray-700/50">
-                <TabsTrigger
-                  value="signin"
-                  className="text-gray-300 data-[state=active]:text-white data-[state=active]:bg-gray-600"
-                >
+              <TabsList className="grid w-full grid-cols-2 bg-slate-700">
+                <TabsTrigger value="signin" className="text-white data-[state=active]:bg-slate-600">
                   Sign In
                 </TabsTrigger>
-                <TabsTrigger
-                  value="signup"
-                  className="text-gray-300 data-[state=active]:text-white data-[state=active]:bg-gray-600"
-                >
+                <TabsTrigger value="signup" className="text-white data-[state=active]:bg-slate-600">
                   Sign Up
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="signin" className="space-y-4 mt-6">
+              <TabsContent value="signin">
                 <form onSubmit={handleSignIn} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="signin-email" className="text-gray-300">
+                    <Label htmlFor="signin-email" className="text-white">
                       Email
                     </Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
-                      <Input
-                        id="signin-email"
-                        name="email"
-                        type="email"
-                        placeholder="Enter your email"
-                        required
-                        className="pl-10 bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-gray-500"
-                      />
-                    </div>
+                    <Input
+                      id="signin-email"
+                      name="email"
+                      type="email"
+                      placeholder="Enter your email"
+                      required
+                      className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
+                    />
                   </div>
-
                   <div className="space-y-2">
-                    <Label htmlFor="signin-password" className="text-gray-300">
+                    <Label htmlFor="signin-password" className="text-white">
                       Password
                     </Label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
                       <Input
                         id="signin-password"
                         name="password"
                         type={showPassword ? "text" : "password"}
                         placeholder="Enter your password"
                         required
-                        className="pl-10 pr-10 bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-gray-500"
+                        className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 pr-10"
                       />
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300"
                       >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4 text-slate-400" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-slate-400" />
+                        )}
+                      </Button>
                     </div>
                   </div>
-
                   {error && <div className="text-red-400 text-sm text-center">{error}</div>}
-
-                  <Button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full bg-gradient-to-r from-gray-700 via-slate-600 to-red-800 hover:from-gray-600 hover:via-slate-500 hover:to-red-700 text-white"
-                  >
-                    {isLoading ? "Signing in..." : "Sign In"}
+                  <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
+                    {isLoading ? "Signing In..." : "Sign In"}
                   </Button>
                 </form>
-
-                <div className="text-center text-sm text-gray-400 mb-4">
+                <div className="mt-4 text-center text-sm text-slate-400">
                   Demo credentials: demo@example.com / password
                 </div>
               </TabsContent>
 
-              <TabsContent value="signup" className="space-y-4 mt-6">
+              <TabsContent value="signup">
                 <form onSubmit={handleSignUp} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="signup-name" className="text-gray-300">
-                      Full Name
-                    </Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
-                      <Input
-                        id="signup-name"
-                        name="name"
-                        type="text"
-                        placeholder="Enter your full name"
-                        required
-                        className="pl-10 bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-gray-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-email" className="text-gray-300">
+                    <Label htmlFor="signup-email" className="text-white">
                       Email
                     </Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
-                      <Input
-                        id="signup-email"
-                        name="email"
-                        type="email"
-                        placeholder="Enter your email"
-                        required
-                        className="pl-10 bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-gray-500"
-                      />
-                    </div>
+                    <Input
+                      id="signup-email"
+                      name="email"
+                      type="email"
+                      placeholder="Enter your email"
+                      required
+                      className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400"
+                    />
                   </div>
-
                   <div className="space-y-2">
-                    <Label htmlFor="signup-password" className="text-gray-300">
+                    <Label htmlFor="signup-password" className="text-white">
                       Password
                     </Label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
                       <Input
                         id="signup-password"
                         name="password"
                         type={showPassword ? "text" : "password"}
-                        placeholder="Create a password (min 6 characters)"
+                        placeholder="Create a password"
                         required
-                        minLength={6}
-                        className="pl-10 pr-10 bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-gray-500"
+                        className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-400 pr-10"
                       />
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300"
                       >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4 text-slate-400" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-slate-400" />
+                        )}
+                      </Button>
                     </div>
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-confirm-password" className="text-gray-300">
-                      Confirm Password
-                    </Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
-                      <Input
-                        id="signup-confirm-password"
-                        name="confirmPassword"
-                        type={showConfirmPassword ? "text" : "password"}
-                        placeholder="Confirm your password"
-                        required
-                        className="pl-10 pr-10 bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-gray-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300"
-                      >
-                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-
                   {error && <div className="text-red-400 text-sm text-center">{error}</div>}
-
-                  <Button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full bg-gradient-to-r from-gray-700 via-slate-600 to-red-800 hover:from-gray-600 hover:via-slate-500 hover:to-red-700 text-white"
-                  >
-                    {isLoading ? "Creating account..." : "Create Account"}
+                  <Button type="submit" className="w-full bg-green-600 hover:bg-green-700" disabled={isLoading}>
+                    {isLoading ? "Creating Account..." : "Sign Up"}
                   </Button>
                 </form>
               </TabsContent>
