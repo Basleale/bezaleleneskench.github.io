@@ -2,14 +2,16 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { CheckCircle, AlertCircle, Loader2 } from "lucide-react"
 
-export default function SetupDbPage() {
-  const [status, setStatus] = useState<string>("")
-  const [loading, setLoading] = useState(false)
+export default function SetupDatabase() {
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
+  const [message, setMessage] = useState("")
 
   const setupDatabase = async () => {
-    setLoading(true)
-    setStatus("Setting up database...")
+    setStatus("loading")
+    setMessage("")
 
     try {
       const response = await fetch("/api/setup-db", {
@@ -18,35 +20,56 @@ export default function SetupDbPage() {
 
       const data = await response.json()
 
-      if (data.success) {
-        setStatus("✅ Database setup completed successfully!")
+      if (response.ok) {
+        setStatus("success")
+        setMessage(data.message || "Database setup completed successfully!")
       } else {
-        setStatus(`❌ Error: ${data.error}`)
+        setStatus("error")
+        setMessage(data.error || "Failed to setup database")
       }
     } catch (error) {
-      setStatus(`❌ Error: ${error.message}`)
-    } finally {
-      setLoading(false)
+      setStatus("error")
+      setMessage("Network error occurred")
+      console.error("Setup error:", error)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-800 to-red-950 flex items-center justify-center">
-      <div className="bg-gray-800/50 rounded-lg p-8 border border-gray-700 max-w-md w-full">
-        <h1 className="text-2xl font-bold text-white mb-6 text-center">Database Setup</h1>
-
-        <div className="space-y-4">
-          <Button onClick={setupDatabase} disabled={loading} className="w-full bg-purple-600 hover:bg-purple-700">
-            {loading ? "Setting up..." : "Setup Database"}
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <CardTitle>Database Setup</CardTitle>
+          <CardDescription>Initialize the database tables for your application</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button onClick={setupDatabase} disabled={status === "loading"} className="w-full">
+            {status === "loading" && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {status === "loading" ? "Setting up..." : "Setup Database"}
           </Button>
 
-          {status && (
-            <div className="p-4 rounded-lg bg-gray-700/50 border border-gray-600">
-              <p className="text-white text-sm">{status}</p>
+          {status === "success" && (
+            <div className="flex items-center space-x-2 text-green-600 bg-green-50 p-3 rounded-md">
+              <CheckCircle className="h-5 w-5" />
+              <span className="text-sm">{message}</span>
             </div>
           )}
-        </div>
-      </div>
+
+          {status === "error" && (
+            <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-md">
+              <AlertCircle className="h-5 w-5" />
+              <span className="text-sm">{message}</span>
+            </div>
+          )}
+
+          {status === "success" && (
+            <div className="text-center">
+              <Button variant="outline" onClick={() => (window.location.href = "/")} className="w-full">
+                Go to Login
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

@@ -1,43 +1,48 @@
-import { sql } from "@vercel/postgres"
 import { NextResponse } from "next/server"
+import { sql } from "@vercel/postgres"
 
 export async function POST() {
   try {
-    // Create the media table
+    // Create users table
+    await sql`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `
+
+    // Create index on email for faster lookups
+    await sql`
+      CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)
+    `
+
+    // Create media table (if it doesn't exist)
     await sql`
       CREATE TABLE IF NOT EXISTS media (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         original_name VARCHAR(255) NOT NULL,
-        type VARCHAR(10) NOT NULL CHECK (type IN ('image', 'video')),
+        type VARCHAR(50) NOT NULL,
         extension VARCHAR(10) NOT NULL,
         blob_url TEXT NOT NULL,
         file_size BIGINT NOT NULL,
-        uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        uploaded_by VARCHAR(100) NOT NULL DEFAULT 'Current User',
+        uploaded_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        uploaded_by VARCHAR(255) NOT NULL,
         tags TEXT[] DEFAULT '{}',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `
 
-    // Create indexes
-    await sql`CREATE INDEX IF NOT EXISTS idx_media_uploaded_at ON media(uploaded_at DESC)`
-    await sql`CREATE INDEX IF NOT EXISTS idx_media_tags ON media USING GIN(tags)`
-    await sql`CREATE INDEX IF NOT EXISTS idx_media_type ON media(type)`
-
     return NextResponse.json({
-      success: true,
-      message: "Database setup completed successfully",
+      message: "Database tables created successfully!",
     })
   } catch (error) {
     console.error("Database setup error:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to setup database",
-        details: error.message,
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: "Failed to setup database tables" }, { status: 500 })
   }
 }

@@ -15,6 +15,15 @@ export interface MediaItem {
   updated_at: string
 }
 
+export interface User {
+  id: string
+  name: string
+  email: string
+  password_hash: string
+  created_at: string
+  updated_at: string
+}
+
 export class MediaDatabase {
   // Get all media items, sorted by upload date (newest first)
   static async getAllMedia(): Promise<MediaItem[]> {
@@ -201,6 +210,56 @@ export class MediaDatabase {
       return null
     } catch (error) {
       console.error("Error fetching media by ID from database:", error)
+      throw error
+    }
+  }
+}
+
+export class UserDatabase {
+  // Create a new user
+  static async createUser(name: string, email: string, passwordHash: string): Promise<User> {
+    try {
+      const result = await sql`
+        INSERT INTO users (name, email, password_hash, created_at, updated_at)
+        VALUES (${name}, ${email}, ${passwordHash}, NOW(), NOW())
+        RETURNING id, name, email, password_hash, created_at, updated_at
+      `
+
+      return result.rows[0] as User
+    } catch (error) {
+      console.error("Error creating user:", error)
+      throw error
+    }
+  }
+
+  // Find user by email
+  static async findUserByEmail(email: string): Promise<User | null> {
+    try {
+      const result = await sql`
+        SELECT id, name, email, password_hash, created_at, updated_at
+        FROM users 
+        WHERE email = ${email}
+      `
+
+      return (result.rows[0] as User) || null
+    } catch (error) {
+      console.error("Error finding user by email:", error)
+      throw error
+    }
+  }
+
+  // Find user by ID
+  static async findUserById(id: string): Promise<User | null> {
+    try {
+      const result = await sql`
+        SELECT id, name, email, password_hash, created_at, updated_at
+        FROM users 
+        WHERE id = ${id}
+      `
+
+      return (result.rows[0] as User) || null
+    } catch (error) {
+      console.error("Error finding user by ID:", error)
       throw error
     }
   }

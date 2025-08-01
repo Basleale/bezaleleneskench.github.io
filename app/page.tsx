@@ -1,29 +1,35 @@
 "use client"
 
-import { useSession } from "next-auth/react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { useEffect } from "react"
 import { AuthForm } from "@/components/auth-form"
 
 export default function HomePage() {
-  const { data: session, status } = useSession()
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
-    if (session) {
+    // Check if user is logged in
+    const user = localStorage.getItem("currentUser")
+    if (user) {
+      setIsAuthenticated(true)
       router.push("/dashboard")
+    } else {
+      setIsAuthenticated(false)
     }
-  }, [session, router])
+    setIsLoading(false)
+  }, [router])
 
-  if (status === "loading") {
+  if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900">
-        <div className="text-white">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-slate-800 to-red-950">
+        <div className="text-white text-xl">Loading...</div>
       </div>
     )
   }
 
-  if (session) {
+  if (isAuthenticated) {
     return null // Will redirect to dashboard
   }
 
