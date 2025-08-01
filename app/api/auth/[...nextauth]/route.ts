@@ -5,8 +5,8 @@ import CredentialsProvider from "next-auth/providers/credentials"
 const handler = NextAuth({
   providers: [
     GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      clientId: "793260875569-tucbsbsp30n0urs3eer98sjcieo4j2r5.apps.googleusercontent.com",
+      clientSecret: "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",
     }),
     CredentialsProvider({
       name: "credentials",
@@ -34,7 +34,7 @@ const handler = NextAuth({
     }),
   ],
   pages: {
-    signIn: "/login",
+    signIn: "/",
   },
   callbacks: {
     async jwt({ token, user }) {
@@ -48,6 +48,12 @@ const handler = NextAuth({
         session.user.id = token.id as string
       }
       return session
+    },
+    async redirect({ url, baseUrl }) {
+      // Redirect to dashboard after successful authentication
+      if (url.startsWith("/")) return `${baseUrl}/dashboard`
+      else if (new URL(url).origin === baseUrl) return url
+      return `${baseUrl}/dashboard`
     },
   },
 })

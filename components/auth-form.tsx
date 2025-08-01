@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
@@ -29,16 +28,19 @@ export default function AuthForm() {
     const password = formData.get("password") as string
 
     try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      })
+      // Simulate API call delay
+      await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      if (result?.error) {
-        setError("Invalid credentials")
+      // For demo purposes, check if user exists in localStorage from previous signup
+      const existingUsers = JSON.parse(localStorage.getItem("users") || "[]")
+      const user = existingUsers.find((u: any) => u.email === email && u.password === password)
+
+      if (user) {
+        // Store current user session
+        localStorage.setItem("user", JSON.stringify({ email: user.email, name: user.name }))
+        router.push("/dashboard")
       } else {
-        router.push("/")
+        setError("Invalid email or password")
       }
     } catch (error) {
       setError("An error occurred during sign in")
@@ -64,32 +66,36 @@ export default function AuthForm() {
       return
     }
 
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters")
+      setIsLoading(false)
+      return
+    }
+
     try {
-      const response = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name, email, password }),
-      })
+      // Simulate API call delay
+      await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      if (response.ok) {
-        // Auto sign in after successful registration
-        const result = await signIn("credentials", {
-          email,
-          password,
-          redirect: false,
-        })
+      // Check if user already exists
+      const existingUsers = JSON.parse(localStorage.getItem("users") || "[]")
+      const userExists = existingUsers.find((u: any) => u.email === email)
 
-        if (result?.error) {
-          setError("Registration successful but sign in failed")
-        } else {
-          router.push("/")
-        }
-      } else {
-        const data = await response.json()
-        setError(data.error || "Registration failed")
+      if (userExists) {
+        setError("User with this email already exists")
+        setIsLoading(false)
+        return
       }
+
+      // Add new user to storage
+      const newUser = { name, email, password }
+      existingUsers.push(newUser)
+      localStorage.setItem("users", JSON.stringify(existingUsers))
+
+      // Store current user session
+      localStorage.setItem("user", JSON.stringify({ email, name }))
+
+      // Redirect to dashboard
+      router.push("/dashboard")
     } catch (error) {
       setError("An error occurred during registration")
     } finally {
@@ -100,7 +106,16 @@ export default function AuthForm() {
   const handleGoogleSignIn = async () => {
     setIsLoading(true)
     try {
-      await signIn("google", { callbackUrl: "/" })
+      const result = await signIn("google", {
+        callbackUrl: "/dashboard",
+        redirect: false,
+      })
+
+      if (result?.error) {
+        setError("Google sign in failed")
+        setIsLoading(false)
+      }
+      // If successful, NextAuth will handle the redirect
     } catch (error) {
       setError("Google sign in failed")
       setIsLoading(false)
@@ -108,41 +123,43 @@ export default function AuthForm() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-800 to-red-950">
       {/* Header */}
-      <header className="flex items-center justify-between p-4 border-b border-slate-800">
+      <header className="flex items-center justify-between p-4 border-b border-gray-700">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" className="text-white hover:bg-slate-800">
+          <Button variant="ghost" size="icon" className="text-white hover:bg-gray-800">
             <Menu className="h-5 w-5" />
           </Button>
         </div>
 
-        <h1 className="text-xl font-bold tracking-wider">ENESKENCH SUMMIT</h1>
+        <h1 className="text-xl font-bold tracking-wider text-white">ENESKENCH SUMMIT</h1>
 
-        <Button variant="ghost" size="icon" className="text-white hover:bg-slate-800">
+        <Button variant="ghost" size="icon" className="text-white hover:bg-gray-800">
           <User className="h-5 w-5" />
         </Button>
       </header>
 
       {/* Auth Content */}
       <div className="flex items-center justify-center min-h-[calc(100vh-80px)] p-4">
-        <Card className="w-full max-w-md bg-slate-900 border-slate-800">
+        <Card className="w-full max-w-md bg-gray-800/50 border-gray-700">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold text-white">Welcome</CardTitle>
-            <CardDescription className="text-slate-400">Access your digital universe</CardDescription>
+            <CardTitle className="text-3xl font-bold text-white mb-2">Your Digital Universe</CardTitle>
+            <CardDescription className="text-gray-300">
+              Discover, collect, and share extraordinary visual art from around the globe.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="signin" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 bg-slate-800">
+              <TabsList className="grid w-full grid-cols-2 bg-gray-700/50">
                 <TabsTrigger
                   value="signin"
-                  className="text-slate-300 data-[state=active]:text-white data-[state=active]:bg-slate-700"
+                  className="text-gray-300 data-[state=active]:text-white data-[state=active]:bg-gray-600"
                 >
                   Sign In
                 </TabsTrigger>
                 <TabsTrigger
                   value="signup"
-                  className="text-slate-300 data-[state=active]:text-white data-[state=active]:bg-slate-700"
+                  className="text-gray-300 data-[state=active]:text-white data-[state=active]:bg-gray-600"
                 >
                   Sign Up
                 </TabsTrigger>
@@ -151,40 +168,40 @@ export default function AuthForm() {
               <TabsContent value="signin" className="space-y-4 mt-6">
                 <form onSubmit={handleSignIn} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="signin-email" className="text-slate-300">
+                    <Label htmlFor="signin-email" className="text-gray-300">
                       Email
                     </Label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
                       <Input
                         id="signin-email"
                         name="email"
                         type="email"
                         placeholder="Enter your email"
                         required
-                        className="pl-10 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 focus:border-slate-600"
+                        className="pl-10 bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-gray-500"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="signin-password" className="text-slate-300">
+                    <Label htmlFor="signin-password" className="text-gray-300">
                       Password
                     </Label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
                       <Input
                         id="signin-password"
                         name="password"
                         type={showPassword ? "text" : "password"}
                         placeholder="Enter your password"
                         required
-                        className="pl-10 pr-10 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 focus:border-slate-600"
+                        className="pl-10 pr-10 bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-gray-500"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-3 text-slate-500 hover:text-slate-300"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300"
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
@@ -196,7 +213,7 @@ export default function AuthForm() {
                   <Button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                    className="w-full bg-gradient-to-r from-gray-700 via-slate-600 to-red-800 hover:from-gray-600 hover:via-slate-500 hover:to-red-700 text-white"
                   >
                     {isLoading ? "Signing in..." : "Sign In"}
                   </Button>
@@ -204,10 +221,10 @@ export default function AuthForm() {
 
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t border-slate-700" />
+                    <span className="w-full border-t border-gray-600" />
                   </div>
                   <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-slate-900 px-2 text-slate-500">Or continue with</span>
+                    <span className="bg-gray-800/50 px-2 text-gray-400">Or continue with</span>
                   </div>
                 </div>
 
@@ -216,7 +233,7 @@ export default function AuthForm() {
                   variant="outline"
                   onClick={handleGoogleSignIn}
                   disabled={isLoading}
-                  className="w-full border-slate-700 bg-slate-800 text-white hover:bg-slate-700"
+                  className="w-full border-gray-600 bg-gray-800/50 text-white hover:bg-gray-700"
                 >
                   <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
                     <path
@@ -238,62 +255,76 @@ export default function AuthForm() {
                   </svg>
                   Continue with Google
                 </Button>
+
+                <div className="text-center text-sm text-gray-400">
+                  Don't have an account?{" "}
+                  <button
+                    onClick={() => {
+                      const signupTab = document.querySelector('[value="signup"]') as HTMLElement
+                      signupTab?.click()
+                    }}
+                    className="text-blue-400 hover:text-blue-300 underline"
+                  >
+                    Sign up here
+                  </button>
+                </div>
               </TabsContent>
 
               <TabsContent value="signup" className="space-y-4 mt-6">
                 <form onSubmit={handleSignUp} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="signup-name" className="text-slate-300">
+                    <Label htmlFor="signup-name" className="text-gray-300">
                       Full Name
                     </Label>
                     <div className="relative">
-                      <User className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
                       <Input
                         id="signup-name"
                         name="name"
                         type="text"
                         placeholder="Enter your full name"
                         required
-                        className="pl-10 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 focus:border-slate-600"
+                        className="pl-10 bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-gray-500"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="signup-email" className="text-slate-300">
+                    <Label htmlFor="signup-email" className="text-gray-300">
                       Email
                     </Label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
                       <Input
                         id="signup-email"
                         name="email"
                         type="email"
                         placeholder="Enter your email"
                         required
-                        className="pl-10 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 focus:border-slate-600"
+                        className="pl-10 bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-gray-500"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="signup-password" className="text-slate-300">
+                    <Label htmlFor="signup-password" className="text-gray-300">
                       Password
                     </Label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
                       <Input
                         id="signup-password"
                         name="password"
                         type={showPassword ? "text" : "password"}
-                        placeholder="Create a password"
+                        placeholder="Create a password (min 6 characters)"
                         required
-                        className="pl-10 pr-10 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 focus:border-slate-600"
+                        minLength={6}
+                        className="pl-10 pr-10 bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-gray-500"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-3 text-slate-500 hover:text-slate-300"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300"
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
@@ -301,23 +332,23 @@ export default function AuthForm() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="signup-confirm-password" className="text-slate-300">
+                    <Label htmlFor="signup-confirm-password" className="text-gray-300">
                       Confirm Password
                     </Label>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
                       <Input
                         id="signup-confirm-password"
                         name="confirmPassword"
                         type={showConfirmPassword ? "text" : "password"}
                         placeholder="Confirm your password"
                         required
-                        className="pl-10 pr-10 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 focus:border-slate-600"
+                        className="pl-10 pr-10 bg-gray-800/50 border-gray-600 text-white placeholder:text-gray-400 focus:border-gray-500"
                       />
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3 top-3 text-slate-500 hover:text-slate-300"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300"
                       >
                         {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
@@ -329,7 +360,7 @@ export default function AuthForm() {
                   <Button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                    className="w-full bg-gradient-to-r from-gray-700 via-slate-600 to-red-800 hover:from-gray-600 hover:via-slate-500 hover:to-red-700 text-white"
                   >
                     {isLoading ? "Creating account..." : "Create Account"}
                   </Button>
@@ -337,10 +368,10 @@ export default function AuthForm() {
 
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t border-slate-700" />
+                    <span className="w-full border-t border-gray-600" />
                   </div>
                   <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-slate-900 px-2 text-slate-500">Or continue with</span>
+                    <span className="bg-gray-800/50 px-2 text-gray-400">Or continue with</span>
                   </div>
                 </div>
 
@@ -349,7 +380,7 @@ export default function AuthForm() {
                   variant="outline"
                   onClick={handleGoogleSignIn}
                   disabled={isLoading}
-                  className="w-full border-slate-700 bg-slate-800 text-white hover:bg-slate-700"
+                  className="w-full border-gray-600 bg-gray-800/50 text-white hover:bg-gray-700"
                 >
                   <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
                     <path
@@ -371,6 +402,19 @@ export default function AuthForm() {
                   </svg>
                   Continue with Google
                 </Button>
+
+                <div className="text-center text-sm text-gray-400">
+                  Already have an account?{" "}
+                  <button
+                    onClick={() => {
+                      const signinTab = document.querySelector('[value="signin"]') as HTMLElement
+                      signinTab?.click()
+                    }}
+                    className="text-blue-400 hover:text-blue-300 underline"
+                  >
+                    Sign in here
+                  </button>
+                </div>
               </TabsContent>
             </Tabs>
           </CardContent>

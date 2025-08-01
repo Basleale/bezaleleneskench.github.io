@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Search, Upload, ExternalLink, Download, Tag, X, Camera, Video, Loader2 } from "lucide-react"
+import { Search, Upload, ExternalLink, Download, Tag, X, Camera, Video, Loader2, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -11,7 +11,7 @@ import { UploadProgress } from "@/components/upload-progress"
 import { useMedia } from "@/hooks/use-media"
 import Link from "next/link"
 import { TaggingModal } from "@/components/tagging-modal"
-import AuthForm from "@/components/auth-form"
+import { signOut, useSession } from "next-auth/react"
 
 const quickAccessUsers = [
   { id: "bas", name: "Bas", initials: "BA" },
@@ -21,40 +21,41 @@ const quickAccessUsers = [
   { id: "felaw", name: "Felaw", initials: "FE" },
 ]
 
-export default function HomePage() {
+export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [expandedMedia, setExpandedMedia] = useState<any>(null)
   const [uploadProgress, setUploadProgress] = useState<{ name: string; progress: number }[]>([])
   const [taggingMedia, setTaggingMedia] = useState<any>(null)
+  const [user, setUser] = useState<any>(null)
   const { media, loading, uploadFiles, updateTags } = useMedia()
   const { toast } = useToast()
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
+  const { data: session } = useSession()
 
   useEffect(() => {
-    // Check if user is authenticated
-    const user = localStorage.getItem("user")
-    if (user) {
-      setIsAuthenticated(true)
-      router.push("/dashboard")
+    // Check authentication
+    const localUser = localStorage.getItem("user")
+    if (localUser) {
+      setUser(JSON.parse(localUser))
+    } else if (session?.user) {
+      setUser(session.user)
     } else {
-      setIsAuthenticated(false)
+      router.push("/")
     }
-    setIsLoading(false)
-  }, [router])
+  }, [router, session])
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-800 to-red-950 flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
-      </div>
-    )
-  }
+  const handleLogout = async () => {
+    // Clear local storage
+    localStorage.removeItem("user")
+    localStorage.removeItem("users")
 
-  // Show auth form if not authenticated
-  if (!isAuthenticated) {
-    return <AuthForm />
+    // Sign out from NextAuth if using Google
+    if (session) {
+      await signOut({ redirect: false })
+    }
+
+    // Redirect to home
+    router.push("/")
   }
 
   const handleUpload = () => {
@@ -160,6 +161,14 @@ export default function HomePage() {
     }
   }
 
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-800 to-red-950 flex items-center justify-center">
+        <div className="text-white text-xl">Loading...</div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-800 to-red-950">
       {/* Header */}
@@ -178,11 +187,26 @@ export default function HomePage() {
           )}
         </Button>
 
-        <Link href="/all-media">
-          <Button className="bg-gradient-to-r from-gray-700 via-slate-600 to-red-800 hover:from-gray-600 hover:via-slate-500 hover:to-red-700 text-white px-6">
-            All Media
-          </Button>
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link href="/all-media">
+            <Button className="bg-gradient-to-r from-gray-700 via-slate-600 to-red-800 hover:from-gray-600 hover:via-slate-500 hover:to-red-700 text-white px-6">
+              All Media
+            </Button>
+          </Link>
+
+          <div className="flex items-center gap-2 text-white">
+            <span className="text-sm">Welcome, {user.name || user.email}</span>
+            <Button
+              onClick={handleLogout}
+              variant="outline"
+              size="sm"
+              className="bg-transparent border-gray-600 hover:bg-gray-800 text-white"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
+            </Button>
+          </div>
+        </div>
       </header>
 
       {/* Main Content */}
