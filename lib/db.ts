@@ -1,4 +1,4 @@
-import { sql } from "@vercel/postgres"
+import { createClient } from "@vercel/postgres"
 
 export interface MediaItem {
   id: string
@@ -27,8 +27,11 @@ export interface User {
 export class MediaDatabase {
   // Get all media items, sorted by upload date (newest first)
   static async getAllMedia(): Promise<MediaItem[]> {
+    const client = createClient()
+    await client.connect()
+
     try {
-      const result = await sql`
+      const result = await client.query(`
         SELECT 
           id,
           name,
@@ -44,7 +47,7 @@ export class MediaDatabase {
           updated_at
         FROM media 
         ORDER BY uploaded_at DESC
-      `
+      `)
 
       return result.rows.map((row) => ({
         ...row,
@@ -53,16 +56,22 @@ export class MediaDatabase {
     } catch (error) {
       console.error("Error fetching media from database:", error)
       throw error
+    } finally {
+      await client.end()
     }
   }
 
   // Insert new media items
   static async insertMedia(mediaItems: Omit<MediaItem, "id" | "created_at" | "updated_at">[]): Promise<MediaItem[]> {
+    const client = createClient()
+    await client.connect()
+
     try {
       const insertedItems: MediaItem[] = []
 
       for (const item of mediaItems) {
-        const result = await sql`
+        const result = await client.query(
+          `
           INSERT INTO media (
             name, 
             original_name, 
@@ -74,18 +83,22 @@ export class MediaDatabase {
             uploaded_by, 
             tags
           ) VALUES (
-            ${item.name},
-            ${item.original_name},
-            ${item.type},
-            ${item.extension},
-            ${item.blob_url},
-            ${item.file_size},
-            ${item.uploaded_at},
-            ${item.uploaded_by},
-            ${item.tags}
+            $1, $2, $3, $4, $5, $6, $7, $8, $9
           )
           RETURNING *
-        `
+        `,
+          [
+            item.name,
+            item.original_name,
+            item.type,
+            item.extension,
+            item.blob_url,
+            item.file_size,
+            item.uploaded_at,
+            item.uploaded_by,
+            item.tags,
+          ],
+        )
 
         if (result.rows[0]) {
           insertedItems.push({
@@ -99,17 +112,25 @@ export class MediaDatabase {
     } catch (error) {
       console.error("Error inserting media to database:", error)
       throw error
+    } finally {
+      await client.end()
     }
   }
 
   // Delete media items by IDs
   static async deleteMedia(ids: string[]): Promise<MediaItem[]> {
+    const client = createClient()
+    await client.connect()
+
     try {
-      const result = await sql`
+      const result = await client.query(
+        `
         DELETE FROM media 
-        WHERE id = ANY(${ids})
+        WHERE id = ANY($1)
         RETURNING *
-      `
+      `,
+        [ids],
+      )
 
       return result.rows.map((row) => ({
         ...row,
@@ -118,20 +139,28 @@ export class MediaDatabase {
     } catch (error) {
       console.error("Error deleting media from database:", error)
       throw error
+    } finally {
+      await client.end()
     }
   }
 
   // Update tags for a media item
   static async updateMediaTags(mediaId: string, tags: string[]): Promise<MediaItem | null> {
+    const client = createClient()
+    await client.connect()
+
     try {
-      const result = await sql`
+      const result = await client.query(
+        `
         UPDATE media 
         SET 
-          tags = ${tags},
+          tags = $1,
           updated_at = NOW()
-        WHERE id = ${mediaId}
+        WHERE id = $2
         RETURNING *
-      `
+      `,
+        [tags, mediaId],
+      )
 
       if (result.rows[0]) {
         return {
@@ -144,13 +173,19 @@ export class MediaDatabase {
     } catch (error) {
       console.error("Error updating media tags in database:", error)
       throw error
+    } finally {
+      await client.end()
     }
   }
 
   // Get media by specific tags
   static async getMediaByTags(tags: string[]): Promise<MediaItem[]> {
+    const client = createClient()
+    await client.connect()
+
     try {
-      const result = await sql`
+      const result = await client.query(
+        `
         SELECT 
           id,
           name,
@@ -165,9 +200,11 @@ export class MediaDatabase {
           created_at,
           updated_at
         FROM media 
-        WHERE tags && ${tags}
+        WHERE tags && $1
         ORDER BY uploaded_at DESC
-      `
+      `,
+        [tags],
+      )
 
       return result.rows.map((row) => ({
         ...row,
@@ -176,13 +213,19 @@ export class MediaDatabase {
     } catch (error) {
       console.error("Error fetching media by tags from database:", error)
       throw error
+    } finally {
+      await client.end()
     }
   }
 
   // Get a single media item by ID
   static async getMediaById(id: string): Promise<MediaItem | null> {
+    const client = createClient()
+    await client.connect()
+
     try {
-      const result = await sql`
+      const result = await client.query(
+        `
         SELECT 
           id,
           name,
@@ -197,8 +240,10 @@ export class MediaDatabase {
           created_at,
           updated_at
         FROM media 
-        WHERE id = ${id}
-      `
+        WHERE id = $1
+      `,
+        [id],
+      )
 
       if (result.rows[0]) {
         return {
@@ -211,6 +256,8 @@ export class MediaDatabase {
     } catch (error) {
       console.error("Error fetching media by ID from database:", error)
       throw error
+    } finally {
+      await client.end()
     }
   }
 }
@@ -218,49 +265,73 @@ export class MediaDatabase {
 export class UserDatabase {
   // Create a new user
   static async createUser(name: string, email: string, passwordHash: string): Promise<User> {
+    const client = createClient()
+    await client.connect()
+
     try {
-      const result = await sql`
+      const result = await client.query(
+        `
         INSERT INTO users (name, email, password_hash, created_at, updated_at)
-        VALUES (${name}, ${email}, ${passwordHash}, NOW(), NOW())
+        VALUES ($1, $2, $3, NOW(), NOW())
         RETURNING id, name, email, password_hash, created_at, updated_at
-      `
+      `,
+        [name, email, passwordHash],
+      )
 
       return result.rows[0] as User
     } catch (error) {
       console.error("Error creating user:", error)
       throw error
+    } finally {
+      await client.end()
     }
   }
 
   // Find user by email
   static async findUserByEmail(email: string): Promise<User | null> {
+    const client = createClient()
+    await client.connect()
+
     try {
-      const result = await sql`
+      const result = await client.query(
+        `
         SELECT id, name, email, password_hash, created_at, updated_at
         FROM users 
-        WHERE email = ${email}
-      `
+        WHERE email = $1
+      `,
+        [email],
+      )
 
       return (result.rows[0] as User) || null
     } catch (error) {
       console.error("Error finding user by email:", error)
       throw error
+    } finally {
+      await client.end()
     }
   }
 
   // Find user by ID
   static async findUserById(id: string): Promise<User | null> {
+    const client = createClient()
+    await client.connect()
+
     try {
-      const result = await sql`
+      const result = await client.query(
+        `
         SELECT id, name, email, password_hash, created_at, updated_at
         FROM users 
-        WHERE id = ${id}
-      `
+        WHERE id = $1
+      `,
+        [id],
+      )
 
       return (result.rows[0] as User) || null
     } catch (error) {
       console.error("Error finding user by ID:", error)
       throw error
+    } finally {
+      await client.end()
     }
   }
 }

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -21,7 +20,25 @@ import { ProfileModal } from "@/components/profile-modal"
 import { ChatModal } from "@/components/chat-modal"
 import { PublicChatModal } from "@/components/public-chat-modal"
 import { UserSearchModal } from "@/components/user-search-modal"
-import { Search, Upload, Download, X, Camera, Video, Loader2, LogOut, User, Settings, Heart, MessageCircle, Send, Compass, Users, Globe } from 'lucide-react'
+import { CommentsModal } from "@/components/comments-modal"
+import {
+  Search,
+  Upload,
+  Download,
+  X,
+  Camera,
+  Video,
+  Loader2,
+  LogOut,
+  User,
+  Settings,
+  Heart,
+  MessageCircle,
+  Compass,
+  Users,
+  Globe,
+  Eye,
+} from "lucide-react"
 
 interface MediaUser {
   id: string
@@ -39,22 +56,24 @@ export default function DashboardPage() {
   const [isChatModalOpen, setIsChatModalOpen] = useState(false)
   const [isPublicChatOpen, setIsPublicChatOpen] = useState(false)
   const [isUserSearchOpen, setIsUserSearchOpen] = useState(false)
+  const [isCommentsModalOpen, setIsCommentsModalOpen] = useState(false)
   const [selectedChatUser, setSelectedChatUser] = useState<any>(null)
+  const [selectedMediaForComments, setSelectedMediaForComments] = useState<any>(null)
   const [likedMedia, setLikedMedia] = useState<Set<string>>(new Set())
-  const [comments, setComments] = useState<{ [key: string]: any[] }>({})
-  const [newComment, setNewComment] = useState("")
-  const [commentingMedia, setCommentingMedia] = useState<string | null>(null)
+  const [mediaLikes, setMediaLikes] = useState<{ [key: string]: number }>({})
+  const [mediaComments, setMediaComments] = useState<{ [key: string]: number }>({})
   const [activeTab, setActiveTab] = useState("explore")
 
   const { media, loading, uploadFiles, mutate } = useMedia()
   const { toast } = useToast()
   const router = useRouter()
 
-  // Auto-refresh every 5 seconds
+  // Real-time updates every 2 seconds
   useEffect(() => {
     const interval = setInterval(() => {
       mutate()
-    }, 5000)
+      updateMediaStats()
+    }, 2000)
 
     return () => clearInterval(interval)
   }, [mutate])
@@ -67,6 +86,62 @@ export default function DashboardPage() {
       router.push("/")
     }
   }, [router])
+
+  useEffect(() => {
+    if (media.length > 0) {
+      updateMediaStats()
+    }
+  }, [media])
+
+  const updateMediaStats = async () => {
+    if (!user) return
+
+    const likesPromises = media.map(async (item) => {
+      try {
+        const response = await fetch(`/api/media/likes?mediaId=${item.id}&userId=${user.id}`)
+        if (response.ok) {
+          const data = await response.json()
+          return { id: item.id, count: data.count, userLiked: data.userLiked }
+        }
+      } catch (error) {
+        console.error("Error fetching likes:", error)
+      }
+      return { id: item.id, count: 0, userLiked: false }
+    })
+
+    const commentsPromises = media.map(async (item) => {
+      try {
+        const response = await fetch(`/api/media/comments?mediaId=${item.id}`)
+        if (response.ok) {
+          const data = await response.json()
+          return { id: item.id, count: data.comments.length }
+        }
+      } catch (error) {
+        console.error("Error fetching comments:", error)
+      }
+      return { id: item.id, count: 0 }
+    })
+
+    const likesResults = await Promise.all(likesPromises)
+    const commentsResults = await Promise.all(commentsPromises)
+
+    const newLikes: { [key: string]: number } = {}
+    const newLikedSet = new Set<string>()
+    const newComments: { [key: string]: number } = {}
+
+    likesResults.forEach(({ id, count, userLiked }) => {
+      newLikes[id] = count
+      if (userLiked) newLikedSet.add(id)
+    })
+
+    commentsResults.forEach(({ id, count }) => {
+      newComments[id] = count
+    })
+
+    setMediaLikes(newLikes)
+    setLikedMedia(newLikedSet)
+    setMediaComments(newComments)
+  }
 
   const handleLogout = () => {
     localStorage.removeItem("currentUser")
@@ -148,40 +223,57 @@ export default function DashboardPage() {
     }
   }
 
-  const handleLike = (mediaId: string) => {
-    setLikedMedia((prev) => {
-      const newLiked = new Set(prev)
-      if (newLiked.has(mediaId)) {
-        newLiked.delete(mediaId)
-      } else {
-        newLiked.add(mediaId)
+  const handleLike = async (mediaId: string) => {
+    if (!user) return
+
+    const isLiked = likedMedia.has(mediaId)
+    const action = isLiked ? "unlike" : "like"
+
+    try {
+      const response = await fetch("/api/media/likes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mediaId,
+          userId: user.id,
+          action,
+        }),
+      })
+
+      if (response.ok) {
+        // Update local state immediately for better UX
+        setLikedMedia((prev) => {
+          const newSet = new Set(prev)
+          if (isLiked) {
+            newSet.delete(mediaId)
+          } else {
+            newSet.add(mediaId)
+          }
+          return newSet
+        })
+
+        setMediaLikes((prev) => ({
+          ...prev,
+          [mediaId]: (prev[mediaId] || 0) + (isLiked ? -1 : 1),
+        }))
       }
-      return newLiked
-    })
-  }
-
-  const handleComment = (mediaId: string) => {
-    if (!newComment.trim()) return
-
-    const comment = {
-      id: Date.now().toString(),
-      text: newComment,
-      author: user?.name || "Anonymous",
-      timestamp: new Date().toISOString(),
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update like",
+        variant: "destructive",
+      })
     }
-
-    setComments((prev) => ({
-      ...prev,
-      [mediaId]: [...(prev[mediaId] || []), comment],
-    }))
-
-    setNewComment("")
-    setCommentingMedia(null)
   }
 
   const handleChatUser = (chatUser: any) => {
     setSelectedChatUser(chatUser)
     setIsChatModalOpen(true)
+  }
+
+  const handleViewComments = (mediaItem: any) => {
+    setSelectedMediaForComments(mediaItem)
+    setIsCommentsModalOpen(true)
   }
 
   const handleProfileUpdate = (updatedUser: MediaUser) => {
@@ -193,9 +285,7 @@ export default function DashboardPage() {
     })
   }
 
-  const filteredMedia = media.filter((item) =>
-    item.name.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const filteredMedia = media.filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()))
 
   if (!user) {
     return (
@@ -215,7 +305,11 @@ export default function DashboardPage() {
             onClick={() => setActiveTab("explore")}
             variant={activeTab === "explore" ? "default" : "ghost"}
             size="icon"
-            className={activeTab === "explore" ? "bg-purple-600 hover:bg-purple-700" : "text-gray-400 hover:text-white hover:bg-gray-800"}
+            className={
+              activeTab === "explore"
+                ? "bg-purple-600 hover:bg-purple-700"
+                : "text-gray-400 hover:text-white hover:bg-gray-800"
+            }
           >
             <Compass className="h-5 w-5" />
           </Button>
@@ -223,7 +317,11 @@ export default function DashboardPage() {
             onClick={() => setActiveTab("chat")}
             variant={activeTab === "chat" ? "default" : "ghost"}
             size="icon"
-            className={activeTab === "chat" ? "bg-purple-600 hover:bg-purple-700" : "text-gray-400 hover:text-white hover:bg-gray-800"}
+            className={
+              activeTab === "chat"
+                ? "bg-purple-600 hover:bg-purple-700"
+                : "text-gray-400 hover:text-white hover:bg-gray-800"
+            }
           >
             <MessageCircle className="h-5 w-5" />
           </Button>
@@ -337,10 +435,7 @@ export default function DashboardPage() {
                     key={mediaItem.id}
                     className="bg-gray-800/50 border-gray-700 hover:border-purple-500 transition-colors"
                   >
-                    <div
-                      className="relative aspect-square cursor-pointer"
-                      onClick={() => handleMediaClick(mediaItem)}
-                    >
+                    <div className="relative aspect-square cursor-pointer" onClick={() => handleMediaClick(mediaItem)}>
                       {mediaItem.type === "image" ? (
                         <img
                           src={mediaItem.url || "/placeholder.svg"}
@@ -389,7 +484,7 @@ export default function DashboardPage() {
 
                     <CardContent className="p-3">
                       {/* Uploader Info */}
-                      <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-2 mb-3">
                         <Avatar className="h-6 w-6">
                           <AvatarFallback className="bg-gradient-to-r from-gray-700 via-slate-600 to-red-800 text-white text-xs">
                             {mediaItem.uploadedBy?.charAt(0)?.toUpperCase() || "U"}
@@ -398,7 +493,8 @@ export default function DashboardPage() {
                         <span className="text-sm text-gray-300">{mediaItem.uploadedBy || "Unknown"}</span>
                       </div>
 
-                      <div className="flex items-center justify-between mb-2">
+                      {/* Action Buttons */}
+                      <div className="flex items-center justify-between mb-3">
                         <Button
                           onClick={(e) => {
                             e.stopPropagation()
@@ -408,12 +504,9 @@ export default function DashboardPage() {
                           variant="ghost"
                           className="text-gray-400 hover:text-white hover:bg-gray-700 p-2"
                         >
-                          <Download className="h-3 w-3" />
+                          <Download className="h-4 w-4" />
                         </Button>
-                      </div>
 
-                      {/* Like and Comment Section */}
-                      <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <Button
                             onClick={(e) => {
@@ -425,61 +518,37 @@ export default function DashboardPage() {
                             className={`p-2 ${likedMedia.has(mediaItem.id) ? "text-red-500" : "text-gray-400 hover:text-red-500"}`}
                           >
                             <Heart className={`h-4 w-4 ${likedMedia.has(mediaItem.id) ? "fill-current" : ""}`} />
+                            <span className="ml-1 text-xs">{mediaLikes[mediaItem.id] || 0}</span>
                           </Button>
 
                           <Button
                             onClick={(e) => {
                               e.stopPropagation()
-                              setCommentingMedia(mediaItem.id)
+                              handleViewComments(mediaItem)
                             }}
                             size="sm"
                             variant="ghost"
                             className="text-gray-400 hover:text-white hover:bg-gray-700 p-2"
                           >
                             <MessageCircle className="h-4 w-4" />
+                            <span className="ml-1 text-xs">{mediaComments[mediaItem.id] || 0}</span>
                           </Button>
-                        </div>
-
-                        <div className="text-xs text-gray-400">
-                          {comments[mediaItem.id]?.length || 0} comments
                         </div>
                       </div>
 
-                      {/* Comment Input */}
-                      {commentingMedia === mediaItem.id && (
-                        <div className="mt-2 flex gap-2">
-                          <Input
-                            placeholder="Add a comment..."
-                            value={newComment}
-                            onChange={(e) => setNewComment(e.target.value)}
-                            className="bg-gray-700/50 border-gray-600 text-white placeholder-gray-400 text-sm"
-                            onKeyPress={(e) => {
-                              if (e.key === "Enter") {
-                                handleComment(mediaItem.id)
-                              }
-                            }}
-                          />
-                          <Button
-                            onClick={() => handleComment(mediaItem.id)}
-                            size="sm"
-                            className="bg-purple-600 hover:bg-purple-700"
-                          >
-                            <Send className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
-
-                      {/* Comments Display */}
-                      {comments[mediaItem.id] && comments[mediaItem.id].length > 0 && (
-                        <div className="mt-2 space-y-1 max-h-20 overflow-y-auto">
-                          {comments[mediaItem.id].map((comment) => (
-                            <div key={comment.id} className="text-xs">
-                              <span className="text-purple-400 font-medium">{comment.author}:</span>
-                              <span className="text-gray-300 ml-1">{comment.text}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      {/* View Comments Button */}
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleViewComments(mediaItem)
+                        }}
+                        size="sm"
+                        variant="outline"
+                        className="w-full text-gray-300 border-gray-600 hover:bg-gray-700 hover:text-white"
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        View Comments
+                      </Button>
                     </CardContent>
                   </Card>
                 ))}
@@ -578,17 +647,24 @@ export default function DashboardPage() {
         currentUser={user}
       />
 
-      <PublicChatModal
-        isOpen={isPublicChatOpen}
-        onClose={() => setIsPublicChatOpen(false)}
-        currentUser={user}
-      />
+      <PublicChatModal isOpen={isPublicChatOpen} onClose={() => setIsPublicChatOpen(false)} currentUser={user} />
 
       <UserSearchModal
         isOpen={isUserSearchOpen}
         onClose={() => setIsUserSearchOpen(false)}
         onSelectUser={handleChatUser}
         currentUser={user}
+      />
+
+      <CommentsModal
+        isOpen={isCommentsModalOpen}
+        onClose={() => {
+          setIsCommentsModalOpen(false)
+          setSelectedMediaForComments(null)
+        }}
+        mediaItem={selectedMediaForComments}
+        currentUser={user}
+        onCommentAdded={() => updateMediaStats()}
       />
     </div>
   )
