@@ -7,28 +7,25 @@ import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useToast } from "@/hooks/use-toast"
-import { Send, Mic, MicOff, Play, Pause } from "lucide-react"
+import { Send, Mic, MicOff, Play, Pause, Globe } from "lucide-react"
 
 interface Message {
   id: string
   content: string
-  sender_id: string
   sender_name: string
-  recipient_id: string
-  recipient_name: string
+  sender_id: string
   message_type: "text" | "voice"
   voice_url?: string
   created_at: string
 }
 
-interface ChatModalProps {
+interface PublicChatModalProps {
   isOpen: boolean
   onClose: () => void
-  user: any
   currentUser: any
 }
 
-export function ChatModal({ isOpen, onClose, user, currentUser }: ChatModalProps) {
+export function PublicChatModal({ isOpen, onClose, currentUser }: PublicChatModalProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState("")
   const [isRecording, setIsRecording] = useState(false)
@@ -45,22 +42,20 @@ export function ChatModal({ isOpen, onClose, user, currentUser }: ChatModalProps
   }
 
   useEffect(() => {
-    if (isOpen && user) {
+    if (isOpen) {
       fetchMessages()
       const interval = setInterval(fetchMessages, 3000) // Refresh every 3 seconds
       return () => clearInterval(interval)
     }
-  }, [isOpen, user])
+  }, [isOpen])
 
   useEffect(() => {
     scrollToBottom()
   }, [messages])
 
   const fetchMessages = async () => {
-    if (!user || !currentUser) return
-
     try {
-      const response = await fetch(`/api/chat/private?user1=${currentUser.id}&user2=${user.id}`)
+      const response = await fetch("/api/chat/public")
       if (response.ok) {
         const data = await response.json()
         setMessages(data.messages || [])
@@ -71,19 +66,17 @@ export function ChatModal({ isOpen, onClose, user, currentUser }: ChatModalProps
   }
 
   const sendTextMessage = async () => {
-    if (!newMessage.trim() || !user) return
+    if (!newMessage.trim()) return
 
     setLoading(true)
     try {
-      const response = await fetch("/api/chat/private", {
+      const response = await fetch("/api/chat/public", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           content: newMessage,
           sender_id: currentUser.id,
           sender_name: currentUser.name,
-          recipient_id: user.id,
-          recipient_name: user.name,
           message_type: "text",
         }),
       })
@@ -139,18 +132,14 @@ export function ChatModal({ isOpen, onClose, user, currentUser }: ChatModalProps
   }
 
   const sendVoiceMessage = async (audioBlob: Blob) => {
-    if (!user) return
-
     setLoading(true)
     try {
       const formData = new FormData()
       formData.append("audio", audioBlob, "voice-message.webm")
       formData.append("sender_id", currentUser.id)
       formData.append("sender_name", currentUser.name)
-      formData.append("recipient_id", user.id)
-      formData.append("recipient_name", user.name)
 
-      const response = await fetch("/api/chat/private/voice", {
+      const response = await fetch("/api/chat/public/voice", {
         method: "POST",
         body: formData,
       })
@@ -185,20 +174,13 @@ export function ChatModal({ isOpen, onClose, user, currentUser }: ChatModalProps
     }
   }
 
-  if (!user) return null
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl h-[600px] bg-gray-800 border-gray-700 text-white">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Avatar className="h-8 w-8">
-              <AvatarImage src={user.profilePicture || "/placeholder.svg"} />
-              <AvatarFallback className="bg-gradient-to-r from-gray-700 via-slate-600 to-red-800 text-white">
-                {user.name.charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            Chat with {user.name}
+            <Globe className="h-5 w-5 text-purple-400" />
+            Public Chat
           </DialogTitle>
         </DialogHeader>
 
@@ -213,17 +195,20 @@ export function ChatModal({ isOpen, onClose, user, currentUser }: ChatModalProps
                 >
                   {message.sender_id !== currentUser.id && (
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={user.profilePicture || "/placeholder.svg"} />
                       <AvatarFallback className="bg-gradient-to-r from-gray-700 via-slate-600 to-red-800 text-white text-sm">
-                        {user.name.charAt(0).toUpperCase()}
+                        {message.sender_name.charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                   )}
 
                   <div className={`max-w-xs ${message.sender_id === currentUser.id ? "order-first" : ""}`}>
+                    {message.sender_id !== currentUser.id && (
+                      <p className="text-xs text-gray-400 mb-1">{message.sender_name}</p>
+                    )}
+
                     <div
                       className={`rounded-lg p-3 ${
-                        message.sender_id === currentUser.id ? "bg-blue-600 text-white" : "bg-gray-700 text-white"
+                        message.sender_id === currentUser.id ? "bg-purple-600 text-white" : "bg-gray-700 text-white"
                       }`}
                     >
                       {message.message_type === "text" ? (
@@ -249,7 +234,7 @@ export function ChatModal({ isOpen, onClose, user, currentUser }: ChatModalProps
                   {message.sender_id === currentUser.id && (
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={currentUser.profilePicture || "/placeholder.svg"} />
-                      <AvatarFallback className="bg-blue-600 text-white text-sm">
+                      <AvatarFallback className="bg-purple-600 text-white text-sm">
                         {currentUser.name.charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
@@ -275,7 +260,7 @@ export function ChatModal({ isOpen, onClose, user, currentUser }: ChatModalProps
               <Button
                 onClick={sendTextMessage}
                 disabled={!newMessage.trim() || loading}
-                className="bg-blue-600 hover:bg-blue-700"
+                className="bg-purple-600 hover:bg-purple-700"
               >
                 <Send className="h-4 w-4" />
               </Button>
