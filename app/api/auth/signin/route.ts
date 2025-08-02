@@ -1,8 +1,7 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { AuthStorage } from "@/lib/auth-storage"
-import bcrypt from "bcryptjs"
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     const { email, password } = await request.json()
 
@@ -10,34 +9,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
     }
 
-    try {
-      // Find user by email in blob storage
-      const user = await AuthStorage.findUserByEmail(email)
+    const user = await AuthStorage.validateUser(email, password)
 
-      if (!user) {
-        return NextResponse.json({ error: "No account found with this email address" }, { status: 401 })
-      }
+    // Don't return password hash
+    const { passwordHash, ...userWithoutPassword } = user
 
-      // Check password
-      const isPasswordValid = await bcrypt.compare(password, user.passwordHash)
-      if (!isPasswordValid) {
-        return NextResponse.json({ error: "Incorrect password" }, { status: 401 })
-      }
-
-      // Return user data (excluding password)
-      const userWithoutPassword = {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-      }
-
-      return NextResponse.json({ user: userWithoutPassword }, { status: 200 })
-    } catch (error) {
-      console.error("Auth storage error:", error)
-      return NextResponse.json({ error: "Authentication service error. Please try again." }, { status: 500 })
-    }
-  } catch (error) {
-    console.error("Sign in error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({
+      success: true,
+      user: userWithoutPassword,
+    })
+  } catch (error: any) {
+    console.error("Signin error:", error)
+    return NextResponse.json({ error: error.message || "Failed to sign in" }, { status: 400 })
   }
 }

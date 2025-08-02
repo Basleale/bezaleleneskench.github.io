@@ -10,15 +10,18 @@ export default function HomePage() {
   const router = useRouter()
 
   useEffect(() => {
-    // Check if user is logged in
-    const user = localStorage.getItem("currentUser")
-    if (user) {
-      setIsAuthenticated(true)
-      router.push("/dashboard")
-    } else {
-      setIsAuthenticated(false)
+    const checkAuth = () => {
+      const user = localStorage.getItem("currentUser")
+      if (user) {
+        setIsAuthenticated(true)
+        router.push("/dashboard")
+      } else {
+        setIsAuthenticated(false)
+      }
+      setIsLoading(false)
     }
-    setIsLoading(false)
+
+    checkAuth()
   }, [router])
 
   if (isLoading) {

@@ -1,96 +1,69 @@
-import { put, list, del } from "@vercel/blob"
+import { put, list } from "@vercel/blob"
+import bcrypt from "bcryptjs"
 
-export interface User {
+interface User {
   id: string
   name: string
   email: string
   passwordHash: string
+  profilePicture?: string
   createdAt: string
 }
 
+const USERS_FILE = "authentication/users.json"
+
 export class AuthStorage {
-  private static readonly AUTH_FOLDER = "authentication/"
-  private static readonly USERS_FILE = "users.json"
-
-  // Get all users from blob storage
-  static async getAllUsers(): Promise<User[]> {
+  static async getUsers(): Promise<User[]> {
     try {
-      const { blobs } = await list({
-        prefix: this.AUTH_FOLDER + this.USERS_FILE,
-      })
+      const { blobs } = await list({ prefix: "authentication/" })
+      const usersBlob = blobs.find((blob) => blob.pathname === USERS_FILE)
 
-      if (blobs.length === 0) {
-        // Initialize with demo user if no users file exists
+      if (!usersBlob) {
+        // Create demo user if no users file exists
         const demoUser: User = {
           id: "demo",
           name: "Demo User",
           email: "demo@example.com",
-          passwordHash: "$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/VcSAg/9qm", // "password"
+          passwordHash: await bcrypt.hash("password", 12),
           createdAt: new Date().toISOString(),
         }
+
         await this.saveUsers([demoUser])
         return [demoUser]
       }
 
-      const usersBlob = blobs[0]
       const response = await fetch(usersBlob.url)
       const users = await response.json()
-      return users as User[]
+      return users
     } catch (error) {
-      console.error("Error fetching users:", error)
-      // Return demo user as fallback
-      return [
-        {
-          id: "demo",
-          name: "Demo User",
-          email: "demo@example.com",
-          passwordHash: "$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj/VcSAg/9qm",
-          createdAt: new Date().toISOString(),
-        },
-      ]
+      console.error("Error getting users:", error)
+      return []
     }
   }
 
-  // Save users to blob storage
   static async saveUsers(users: User[]): Promise<void> {
     try {
-      // Delete existing users file
-      const { blobs } = await list({
-        prefix: this.AUTH_FOLDER + this.USERS_FILE,
-      })
-
-      for (const blob of blobs) {
-        await del(blob.url)
-      }
-
-      // Save new users file
-      const usersJson = JSON.stringify(users, null, 2)
-      await put(this.AUTH_FOLDER + this.USERS_FILE, usersJson, {
+      const blob = await put(USERS_FILE, JSON.stringify(users, null, 2), {
         access: "public",
-        contentType: "application/json",
+        token: process.env.BLOB_READ_WRITE_TOKEN,
       })
+      console.log("Users saved to:", blob.url)
     } catch (error) {
       console.error("Error saving users:", error)
       throw error
     }
   }
 
-  // Find user by email
-  static async findUserByEmail(email: string): Promise<User | null> {
-    const users = await this.getAllUsers()
-    return users.find((user) => user.email === email) || null
-  }
-
-  // Create new user
-  static async createUser(name: string, email: string, passwordHash: string): Promise<User> {
-    const users = await this.getAllUsers()
+  static async createUser(name: string, email: string, password: string): Promise<User> {
+    const users = await this.getUsers()
 
     // Check if user already exists
     const existingUser = users.find((user) => user.email === email)
     if (existingUser) {
-      throw new Error("User with this email already exists")
+      throw new Error("An account with this email already exists")
     }
 
+    const passwordHash = await bcrypt.hash(password, 12)
     const newUser: User = {
       id: Date.now().toString(),
       name,
@@ -105,9 +78,19 @@ export class AuthStorage {
     return newUser
   }
 
-  // Find user by ID
-  static async findUserById(id: string): Promise<User | null> {
-    const users = await this.getAllUsers()
-    return users.find((user) => user.id === id) || null
+  static async validateUser(email: string, password: string): Promise<User> {
+    const users = await this.getUsers()
+    const user = users.find((u) => u.email === email)
+
+    if (!user) {
+      throw new Error("No account found with this email address")
+    }
+
+    const isValidPassword = await bcrypt.compare(password, user.passwordHash)
+    if (!isValidPassword) {
+      throw new Error("Incorrect password")
+    }
+
+    return user
   }
 }
