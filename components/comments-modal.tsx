@@ -9,17 +9,14 @@ import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useToast } from "@/hooks/use-toast"
-import { Send, Loader2 } from "lucide-react"
+import { Send, Loader2, MessageCircle } from "lucide-react"
 
 interface Comment {
   id: string
   content: string
   createdAt: string
-  user: {
-    id: string
-    name: string
-    email: string
-  }
+  userId: string
+  userName: string
 }
 
 interface CommentsModalProps {
@@ -54,7 +51,7 @@ export function CommentsModal({ isOpen, onClose, mediaItem, currentUser, onComme
       const response = await fetch(`/api/media/comments?mediaId=${mediaItem.id}`)
       if (response.ok) {
         const data = await response.json()
-        setComments(data.comments)
+        setComments(data.comments || [])
       }
     } catch (error) {
       console.error("Error fetching comments:", error)
@@ -74,14 +71,14 @@ export function CommentsModal({ isOpen, onClose, mediaItem, currentUser, onComme
         body: JSON.stringify({
           mediaId: mediaItem.id,
           userId: currentUser.id,
+          userName: currentUser.name,
           content: newComment.trim(),
         }),
       })
 
       if (response.ok) {
-        const data = await response.json()
-        setComments((prev) => [...prev, data.comment])
         setNewComment("")
+        fetchComments() // Refresh comments
         onCommentAdded()
         toast({
           title: "Comment added",
@@ -114,7 +111,10 @@ export function CommentsModal({ isOpen, onClose, mediaItem, currentUser, onComme
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-2xl max-h-[80vh]">
         <DialogHeader>
-          <DialogTitle className="text-white">Comments</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <MessageCircle className="h-5 w-5 text-blue-400" />
+            Comments
+          </DialogTitle>
         </DialogHeader>
 
         {/* Media Preview */}
@@ -153,12 +153,12 @@ export function CommentsModal({ isOpen, onClose, mediaItem, currentUser, onComme
                 <div key={comment.id} className="flex gap-3">
                   <Avatar className="h-8 w-8 flex-shrink-0">
                     <AvatarFallback className="bg-gradient-to-r from-gray-700 via-slate-600 to-red-800 text-white text-xs">
-                      {comment.user.name.charAt(0).toUpperCase()}
+                      {comment.userName.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-sm text-purple-400">{comment.user.name}</span>
+                      <span className="font-medium text-sm text-purple-400">{comment.userName}</span>
                       <span className="text-xs text-gray-500">{new Date(comment.createdAt).toLocaleString()}</span>
                     </div>
                     <p className="text-gray-300 text-sm break-words">{comment.content}</p>

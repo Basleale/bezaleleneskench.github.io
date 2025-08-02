@@ -4,15 +4,15 @@ import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { useToast } from "@/hooks/use-toast"
-import { Search, Loader2, MessageCircle } from "lucide-react"
+import { Search, Loader2, Users } from "lucide-react"
 
 interface User {
   id: string
   name: string
   email: string
+  profilePicture?: string
 }
 
 interface UserSearchModalProps {
@@ -26,7 +26,6 @@ export function UserSearchModal({ isOpen, onClose, onSelectUser, currentUser }: 
   const [searchQuery, setSearchQuery] = useState("")
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
-  const { toast } = useToast()
 
   useEffect(() => {
     if (isOpen) {
@@ -36,10 +35,7 @@ export function UserSearchModal({ isOpen, onClose, onSelectUser, currentUser }: 
 
   useEffect(() => {
     if (searchQuery.trim()) {
-      const timeoutId = setTimeout(() => {
-        searchUsers()
-      }, 300)
-      return () => clearTimeout(timeoutId)
+      searchUsers()
     } else {
       fetchUsers()
     }
@@ -56,11 +52,7 @@ export function UserSearchModal({ isOpen, onClose, onSelectUser, currentUser }: 
         setUsers(filteredUsers)
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to fetch users",
-        variant: "destructive",
-      })
+      console.error("Error fetching users:", error)
     } finally {
       setLoading(false)
     }
@@ -77,11 +69,7 @@ export function UserSearchModal({ isOpen, onClose, onSelectUser, currentUser }: 
         setUsers(filteredUsers)
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to search users",
-        variant: "destructive",
-      })
+      console.error("Error searching users:", error)
     } finally {
       setLoading(false)
     }
@@ -96,14 +84,17 @@ export function UserSearchModal({ isOpen, onClose, onSelectUser, currentUser }: 
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-white">Find Users to Chat</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-blue-400" />
+            Find Users
+          </DialogTitle>
         </DialogHeader>
 
         {/* Search Input */}
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
-            placeholder="Search users by name or email..."
+            placeholder="Search users..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10 bg-gray-700/50 border-gray-600 text-white placeholder-gray-400"
@@ -124,30 +115,23 @@ export function UserSearchModal({ isOpen, onClose, onSelectUser, currentUser }: 
           ) : (
             <div className="space-y-2">
               {users.map((user) => (
-                <div
+                <Button
                   key={user.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-gray-700/30 hover:bg-gray-700/50 transition-colors"
+                  onClick={() => handleSelectUser(user)}
+                  variant="ghost"
+                  className="w-full justify-start p-3 h-auto hover:bg-gray-700/50"
                 >
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-10 w-10">
-                      <AvatarFallback className="bg-gradient-to-r from-gray-700 via-slate-600 to-red-800 text-white">
-                        {user.name.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-medium text-white">{user.name}</p>
-                      <p className="text-sm text-gray-400">{user.email}</p>
-                    </div>
+                  <Avatar className="h-10 w-10 mr-3">
+                    <AvatarImage src={user.profilePicture || "/placeholder.svg"} />
+                    <AvatarFallback className="bg-gradient-to-r from-gray-700 via-slate-600 to-red-800 text-white">
+                      {user.name.charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="text-left">
+                    <p className="font-medium text-white">{user.name}</p>
+                    <p className="text-sm text-gray-400">{user.email}</p>
                   </div>
-                  <Button
-                    onClick={() => handleSelectUser(user)}
-                    size="sm"
-                    className="bg-purple-600 hover:bg-purple-700"
-                  >
-                    <MessageCircle className="h-4 w-4 mr-2" />
-                    Chat
-                  </Button>
-                </div>
+                </Button>
               ))}
             </div>
           )}

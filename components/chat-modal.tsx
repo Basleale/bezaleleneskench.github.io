@@ -65,7 +65,7 @@ export function ChatModal({ isOpen, onClose, user, currentUser }: ChatModalProps
       const response = await fetch(`/api/chat/private?user1=${currentUser.id}&user2=${user.id}`)
       if (response.ok) {
         const data = await response.json()
-        setMessages(data.messages)
+        setMessages(data.messages || [])
       }
     } catch (error) {
       console.error("Error fetching messages:", error)
@@ -85,15 +85,16 @@ export function ChatModal({ isOpen, onClose, user, currentUser }: ChatModalProps
         body: JSON.stringify({
           senderId: currentUser.id,
           receiverId: user.id,
+          senderName: currentUser.name,
+          receiverName: user.name,
           content: newMessage.trim(),
           type: "text",
         }),
       })
 
       if (response.ok) {
-        const data = await response.json()
-        setMessages((prev) => [...prev, data.message])
         setNewMessage("")
+        fetchMessages() // Refresh messages
       } else {
         throw new Error("Failed to send message")
       }
@@ -155,6 +156,8 @@ export function ChatModal({ isOpen, onClose, user, currentUser }: ChatModalProps
       formData.append("audio", audioBlob, "voice-message.webm")
       formData.append("senderId", currentUser.id)
       formData.append("receiverId", user.id)
+      formData.append("senderName", currentUser.name)
+      formData.append("receiverName", user.name)
 
       const response = await fetch("/api/chat/private/voice", {
         method: "POST",
@@ -162,8 +165,7 @@ export function ChatModal({ isOpen, onClose, user, currentUser }: ChatModalProps
       })
 
       if (response.ok) {
-        const data = await response.json()
-        setMessages((prev) => [...prev, data.message])
+        fetchMessages() // Refresh messages
       } else {
         throw new Error("Failed to send voice message")
       }
@@ -248,7 +250,7 @@ export function ChatModal({ isOpen, onClose, user, currentUser }: ChatModalProps
                       {message.type === "text" ? (
                         <div
                           className={`inline-block p-3 rounded-lg max-w-xs ${
-                            isOwn ? "bg-purple-600 text-white" : "bg-gray-700 text-gray-300"
+                            isOwn ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-300"
                           }`}
                         >
                           <p className="text-sm break-words">{message.content}</p>
@@ -256,7 +258,7 @@ export function ChatModal({ isOpen, onClose, user, currentUser }: ChatModalProps
                       ) : (
                         <div
                           className={`inline-block p-3 rounded-lg ${
-                            isOwn ? "bg-purple-600 text-white" : "bg-gray-700 text-gray-300"
+                            isOwn ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-300"
                           }`}
                         >
                           <Button
@@ -294,7 +296,7 @@ export function ChatModal({ isOpen, onClose, user, currentUser }: ChatModalProps
               onClick={handleSendMessage}
               disabled={!newMessage.trim() || sending}
               size="sm"
-              className="bg-purple-600 hover:bg-purple-700"
+              className="bg-blue-600 hover:bg-blue-700"
             >
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>

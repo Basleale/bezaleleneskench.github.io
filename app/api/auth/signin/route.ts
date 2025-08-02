@@ -1,25 +1,36 @@
-import { NextResponse } from "next/server"
-import { AuthStorage } from "@/lib/auth-storage"
+import { type NextRequest, NextResponse } from "next/server"
+import bcrypt from "bcryptjs"
+import { BlobStorage } from "@/lib/blob-storage"
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const { email, password } = await request.json()
 
-    if (!email || !password) {
-      return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
+    if (!email || !email.trim()) {
+      return NextResponse.json({ error: "Email is required" }, { status: 400 })
     }
 
-    const user = await AuthStorage.validateUser(email, password)
+    if (!password) {
+      return NextResponse.json({ error: "Password is required" }, { status: 400 })
+    }
 
-    // Don't return password hash
-    const { passwordHash, ...userWithoutPassword } = user
+    // Find user
+    const user = await BlobStorage.getUserByEmail(email.trim())
+    if (!user) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
+    }
 
-    return NextResponse.json({
-      success: true,
-      user: userWithoutPassword,
-    })
-  } catch (error: any) {
-    console.error("Signin error:", error)
-    return NextResponse.json({ error: error.message || "Failed to sign in" }, { status: 400 })
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.passwordHash)
+    if (!isValidPassword) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
+    }
+
+    // Return user without password hash
+    const { passwordHash: _, ...userWithoutPassword } = user
+    return NextResponse.json({ user: userWithoutPassword })
+  } catch (error) {
+    console.error("Error signing in user:", error)
+    return NextResponse.json({ error: "Failed to sign in" }, { status: 500 })
   }
 }

@@ -1,4 +1,4 @@
-import { createClient } from "@vercel/postgres"
+import { put, list, del } from "@vercel/blob"
 
 export interface MediaItem {
   id: string
@@ -13,6 +13,7 @@ export interface MediaItem {
   tags: string[]
   created_at: string
   updated_at: string
+  url?: string
 }
 
 export interface User {
@@ -22,242 +23,145 @@ export interface User {
   password_hash: string
   created_at: string
   updated_at: string
+  profilePicture?: string
 }
 
 export class MediaDatabase {
   // Get all media items, sorted by upload date (newest first)
   static async getAllMedia(): Promise<MediaItem[]> {
-    const client = createClient()
-    await client.connect()
-
     try {
-      const result = await client.query(`
-        SELECT 
-          id,
-          name,
-          original_name,
-          type,
-          extension,
-          blob_url,
-          file_size,
-          uploaded_at,
-          uploaded_by,
-          tags,
-          created_at,
-          updated_at
-        FROM media 
-        ORDER BY uploaded_at DESC
-      `)
+      const { blobs } = await list({ prefix: "media-items/" })
+      const mediaItems: MediaItem[] = []
 
-      return result.rows.map((row) => ({
-        ...row,
-        tags: row.tags || [],
-      })) as MediaItem[]
+      for (const blob of blobs) {
+        try {
+          const response = await fetch(blob.url)
+          const item = await response.json()
+          mediaItems.push({
+            ...item,
+            url: item.blob_url, // Add url property for compatibility
+          })
+        } catch (error) {
+          console.error("Error fetching media item:", error)
+        }
+      }
+
+      return mediaItems.sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime())
     } catch (error) {
-      console.error("Error fetching media from database:", error)
-      throw error
-    } finally {
-      await client.end()
+      console.error("Error getting media from blob storage:", error)
+      return []
     }
   }
 
   // Insert new media items
   static async insertMedia(mediaItems: Omit<MediaItem, "id" | "created_at" | "updated_at">[]): Promise<MediaItem[]> {
-    const client = createClient()
-    await client.connect()
-
     try {
       const insertedItems: MediaItem[] = []
 
       for (const item of mediaItems) {
-        const result = await client.query(
-          `
-          INSERT INTO media (
-            name, 
-            original_name, 
-            type, 
-            extension, 
-            blob_url, 
-            file_size, 
-            uploaded_at, 
-            uploaded_by, 
-            tags
-          ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9
-          )
-          RETURNING *
-        `,
-          [
-            item.name,
-            item.original_name,
-            item.type,
-            item.extension,
-            item.blob_url,
-            item.file_size,
-            item.uploaded_at,
-            item.uploaded_by,
-            item.tags,
-          ],
-        )
-
-        if (result.rows[0]) {
-          insertedItems.push({
-            ...result.rows[0],
-            tags: result.rows[0].tags || [],
-          } as MediaItem)
+        const id = `media_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        const fullItem: MediaItem = {
+          ...item,
+          id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          url: item.blob_url, // Add url property for compatibility
         }
+
+        await put(`media-items/${id}.json`, JSON.stringify(fullItem), {
+          access: "public",
+        })
+
+        insertedItems.push(fullItem)
       }
 
       return insertedItems
     } catch (error) {
-      console.error("Error inserting media to database:", error)
+      console.error("Error inserting media to blob storage:", error)
       throw error
-    } finally {
-      await client.end()
     }
   }
 
   // Delete media items by IDs
   static async deleteMedia(ids: string[]): Promise<MediaItem[]> {
-    const client = createClient()
-    await client.connect()
-
     try {
-      const result = await client.query(
-        `
-        DELETE FROM media 
-        WHERE id = ANY($1)
-        RETURNING *
-      `,
-        [ids],
-      )
+      const deletedItems: MediaItem[] = []
 
-      return result.rows.map((row) => ({
-        ...row,
-        tags: row.tags || [],
-      })) as MediaItem[]
+      for (const id of ids) {
+        try {
+          // Get the item before deleting
+          const response = await fetch(`https://blob.vercel-storage.com/media-items/${id}.json`)
+          if (response.ok) {
+            const item = await response.json()
+            deletedItems.push(item)
+          }
+
+          // Delete the item
+          await del(`media-items/${id}.json`)
+        } catch (error) {
+          console.error(`Error deleting media item ${id}:`, error)
+        }
+      }
+
+      return deletedItems
     } catch (error) {
-      console.error("Error deleting media from database:", error)
+      console.error("Error deleting media from blob storage:", error)
       throw error
-    } finally {
-      await client.end()
     }
   }
 
   // Update tags for a media item
   static async updateMediaTags(mediaId: string, tags: string[]): Promise<MediaItem | null> {
-    const client = createClient()
-    await client.connect()
-
     try {
-      const result = await client.query(
-        `
-        UPDATE media 
-        SET 
-          tags = $1,
-          updated_at = NOW()
-        WHERE id = $2
-        RETURNING *
-      `,
-        [tags, mediaId],
-      )
+      // Get existing item
+      const response = await fetch(`https://blob.vercel-storage.com/media-items/${mediaId}.json`)
+      if (!response.ok) return null
 
-      if (result.rows[0]) {
-        return {
-          ...result.rows[0],
-          tags: result.rows[0].tags || [],
-        } as MediaItem
+      const item = await response.json()
+      const updatedItem = {
+        ...item,
+        tags,
+        updated_at: new Date().toISOString(),
       }
 
-      return null
+      // Update the item
+      await put(`media-items/${mediaId}.json`, JSON.stringify(updatedItem), {
+        access: "public",
+      })
+
+      return updatedItem
     } catch (error) {
-      console.error("Error updating media tags in database:", error)
+      console.error("Error updating media tags in blob storage:", error)
       throw error
-    } finally {
-      await client.end()
     }
   }
 
   // Get media by specific tags
   static async getMediaByTags(tags: string[]): Promise<MediaItem[]> {
-    const client = createClient()
-    await client.connect()
-
     try {
-      const result = await client.query(
-        `
-        SELECT 
-          id,
-          name,
-          original_name,
-          type,
-          extension,
-          blob_url,
-          file_size,
-          uploaded_at,
-          uploaded_by,
-          tags,
-          created_at,
-          updated_at
-        FROM media 
-        WHERE tags && $1
-        ORDER BY uploaded_at DESC
-      `,
-        [tags],
-      )
-
-      return result.rows.map((row) => ({
-        ...row,
-        tags: row.tags || [],
-      })) as MediaItem[]
+      const allMedia = await this.getAllMedia()
+      return allMedia.filter((item) => item.tags && item.tags.some((tag) => tags.includes(tag)))
     } catch (error) {
-      console.error("Error fetching media by tags from database:", error)
+      console.error("Error fetching media by tags from blob storage:", error)
       throw error
-    } finally {
-      await client.end()
     }
   }
 
   // Get a single media item by ID
   static async getMediaById(id: string): Promise<MediaItem | null> {
-    const client = createClient()
-    await client.connect()
-
     try {
-      const result = await client.query(
-        `
-        SELECT 
-          id,
-          name,
-          original_name,
-          type,
-          extension,
-          blob_url,
-          file_size,
-          uploaded_at,
-          uploaded_by,
-          tags,
-          created_at,
-          updated_at
-        FROM media 
-        WHERE id = $1
-      `,
-        [id],
-      )
-
-      if (result.rows[0]) {
+      const response = await fetch(`https://blob.vercel-storage.com/media-items/${id}.json`)
+      if (response.ok) {
+        const item = await response.json()
         return {
-          ...result.rows[0],
-          tags: result.rows[0].tags || [],
-        } as MediaItem
+          ...item,
+          url: item.blob_url, // Add url property for compatibility
+        }
       }
-
       return null
     } catch (error) {
-      console.error("Error fetching media by ID from database:", error)
+      console.error("Error fetching media by ID from blob storage:", error)
       throw error
-    } finally {
-      await client.end()
     }
   }
 }
@@ -265,73 +169,63 @@ export class MediaDatabase {
 export class UserDatabase {
   // Create a new user
   static async createUser(name: string, email: string, passwordHash: string): Promise<User> {
-    const client = createClient()
-    await client.connect()
-
     try {
-      const result = await client.query(
-        `
-        INSERT INTO users (name, email, password_hash, created_at, updated_at)
-        VALUES ($1, $2, $3, NOW(), NOW())
-        RETURNING id, name, email, password_hash, created_at, updated_at
-      `,
-        [name, email, passwordHash],
-      )
+      const id = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      const user: User = {
+        id,
+        name,
+        email,
+        password_hash: passwordHash,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
 
-      return result.rows[0] as User
+      await put(`users/${id}.json`, JSON.stringify(user), {
+        access: "public",
+      })
+
+      return user
     } catch (error) {
       console.error("Error creating user:", error)
       throw error
-    } finally {
-      await client.end()
     }
   }
 
   // Find user by email
   static async findUserByEmail(email: string): Promise<User | null> {
-    const client = createClient()
-    await client.connect()
-
     try {
-      const result = await client.query(
-        `
-        SELECT id, name, email, password_hash, created_at, updated_at
-        FROM users 
-        WHERE email = $1
-      `,
-        [email],
-      )
+      const { blobs } = await list({ prefix: "users/" })
 
-      return (result.rows[0] as User) || null
+      for (const blob of blobs) {
+        try {
+          const response = await fetch(blob.url)
+          const user = await response.json()
+          if (user.email === email) {
+            return user
+          }
+        } catch (error) {
+          console.error("Error fetching user:", error)
+        }
+      }
+
+      return null
     } catch (error) {
       console.error("Error finding user by email:", error)
       throw error
-    } finally {
-      await client.end()
     }
   }
 
   // Find user by ID
   static async findUserById(id: string): Promise<User | null> {
-    const client = createClient()
-    await client.connect()
-
     try {
-      const result = await client.query(
-        `
-        SELECT id, name, email, password_hash, created_at, updated_at
-        FROM users 
-        WHERE id = $1
-      `,
-        [id],
-      )
-
-      return (result.rows[0] as User) || null
+      const response = await fetch(`https://blob.vercel-storage.com/users/${id}.json`)
+      if (response.ok) {
+        return await response.json()
+      }
+      return null
     } catch (error) {
       console.error("Error finding user by ID:", error)
       throw error
-    } finally {
-      await client.end()
     }
   }
 }

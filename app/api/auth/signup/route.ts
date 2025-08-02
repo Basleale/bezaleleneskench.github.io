@@ -1,25 +1,44 @@
-import { NextResponse } from "next/server"
-import { AuthStorage } from "@/lib/auth-storage"
+import { type NextRequest, NextResponse } from "next/server"
+import bcrypt from "bcryptjs"
+import { BlobStorage } from "@/lib/blob-storage"
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const { name, email, password } = await request.json()
 
-    if (!name || !email || !password) {
-      return NextResponse.json({ error: "Name, email, and password are required" }, { status: 400 })
+    if (!name || !name.trim()) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 })
     }
 
-    const user = await AuthStorage.createUser(name, email, password)
+    if (!email || !email.trim()) {
+      return NextResponse.json({ error: "Email is required" }, { status: 400 })
+    }
 
-    // Don't return password hash
-    const { passwordHash, ...userWithoutPassword } = user
+    if (!password || password.length < 6) {
+      return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 })
+    }
 
-    return NextResponse.json({
-      success: true,
-      user: userWithoutPassword,
+    // Check if user already exists
+    const existingUser = await BlobStorage.getUserByEmail(email.trim())
+    if (existingUser) {
+      return NextResponse.json({ error: "User already exists" }, { status: 400 })
+    }
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 12)
+
+    // Create user
+    const user = await BlobStorage.addUser({
+      name: name.trim(),
+      email: email.trim(),
+      passwordHash,
     })
-  } catch (error: any) {
-    console.error("Signup error:", error)
-    return NextResponse.json({ error: error.message || "Failed to create account" }, { status: 400 })
+
+    // Return user without password hash
+    const { passwordHash: _, ...userWithoutPassword } = user
+    return NextResponse.json({ user: userWithoutPassword })
+  } catch (error) {
+    console.error("Error creating user:", error)
+    return NextResponse.json({ error: "Failed to create user" }, { status: 500 })
   }
 }

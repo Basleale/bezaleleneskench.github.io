@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useToast } from "@/hooks/use-toast"
-import { Send, Mic, MicOff, Play, Pause, Loader2 } from "lucide-react"
+import { Send, Mic, MicOff, Play, Pause, Loader2, Globe } from "lucide-react"
 
 interface Message {
   id: string
@@ -64,7 +64,7 @@ export function PublicChatModal({ isOpen, onClose, currentUser }: PublicChatModa
       const response = await fetch("/api/chat/public")
       if (response.ok) {
         const data = await response.json()
-        setMessages(data.messages)
+        setMessages(data.messages || [])
       }
     } catch (error) {
       console.error("Error fetching messages:", error)
@@ -83,15 +83,15 @@ export function PublicChatModal({ isOpen, onClose, currentUser }: PublicChatModa
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           senderId: currentUser.id,
+          senderName: currentUser.name,
           content: newMessage.trim(),
           type: "text",
         }),
       })
 
       if (response.ok) {
-        const data = await response.json()
-        setMessages((prev) => [...prev, data.message])
         setNewMessage("")
+        fetchMessages() // Refresh messages
       } else {
         throw new Error("Failed to send message")
       }
@@ -152,6 +152,7 @@ export function PublicChatModal({ isOpen, onClose, currentUser }: PublicChatModa
       const formData = new FormData()
       formData.append("audio", audioBlob, "voice-message.webm")
       formData.append("senderId", currentUser.id)
+      formData.append("senderName", currentUser.name)
 
       const response = await fetch("/api/chat/public/voice", {
         method: "POST",
@@ -159,8 +160,7 @@ export function PublicChatModal({ isOpen, onClose, currentUser }: PublicChatModa
       })
 
       if (response.ok) {
-        const data = await response.json()
-        setMessages((prev) => [...prev, data.message])
+        fetchMessages() // Refresh messages
       } else {
         throw new Error("Failed to send voice message")
       }
@@ -198,7 +198,10 @@ export function PublicChatModal({ isOpen, onClose, currentUser }: PublicChatModa
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="bg-gray-800 border-gray-700 text-white max-w-2xl max-h-[80vh]">
         <DialogHeader>
-          <DialogTitle className="text-white">Public Chat</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Globe className="h-5 w-5 text-purple-400" />
+            Public Chat
+          </DialogTitle>
         </DialogHeader>
 
         {/* Messages */}

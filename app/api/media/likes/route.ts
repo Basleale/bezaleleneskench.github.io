@@ -1,84 +1,53 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@vercel/postgres"
+import { BlobStorage } from "@/lib/blob-storage"
 
 export async function GET(request: NextRequest) {
-  const client = createClient()
-
   try {
-    await client.connect()
-
     const { searchParams } = new URL(request.url)
     const mediaId = searchParams.get("mediaId")
-    const userId = searchParams.get("userId")
 
-    if (!mediaId) {
-      return NextResponse.json({ error: "Media ID required" }, { status: 400 })
+    if (!mediaId || !mediaId.trim()) {
+      return NextResponse.json({ error: "Valid Media ID required" }, { status: 400 })
     }
 
-    // Get like count
-    const countResult = await client.query(
-      `
-      SELECT COUNT(*) as count FROM media_likes WHERE media_id = $1
-    `,
-      [mediaId],
-    )
-
-    // Check if user liked
-    let userLiked = false
-    if (userId) {
-      const userResult = await client.query(
-        `
-        SELECT id FROM media_likes WHERE media_id = $1 AND user_id = $2
-      `,
-        [mediaId, userId],
-      )
-      userLiked = userResult.rows.length > 0
-    }
-
-    return NextResponse.json({
-      count: Number.parseInt(countResult.rows[0].count),
-      userLiked,
-    })
+    const likes = await BlobStorage.getLikes(mediaId)
+    return NextResponse.json({ likes, count: likes.length })
   } catch (error) {
     console.error("Error fetching likes:", error)
     return NextResponse.json({ error: "Failed to fetch likes" }, { status: 500 })
-  } finally {
-    await client.end()
   }
 }
 
 export async function POST(request: NextRequest) {
-  const client = createClient()
-
   try {
-    await client.connect()
+    const { mediaId, userId, userName, action } = await request.json()
 
-    const { mediaId, userId, action } = await request.json()
-
-    if (action === "like") {
-      await client.query(
-        `
-        INSERT INTO media_likes (media_id, user_id, created_at)
-        VALUES ($1, $2, NOW())
-        ON CONFLICT (media_id, user_id) DO NOTHING
-      `,
-        [mediaId, userId],
-      )
-    } else if (action === "unlike") {
-      await client.query(
-        `
-        DELETE FROM media_likes 
-        WHERE media_id = $1 AND user_id = $2
-      `,
-        [mediaId, userId],
-      )
+    if (!mediaId || !mediaId.trim()) {
+      return NextResponse.json({ error: "Valid Media ID required" }, { status: 400 })
     }
 
-    return NextResponse.json({ success: true })
+    if (!userId || !userId.trim()) {
+      return NextResponse.json({ error: "Valid User ID required" }, { status: 400 })
+    }
+
+    if (!userName || !userName.trim()) {
+      return NextResponse.json({ error: "Valid User Name required" }, { status: 400 })
+    }
+
+    if (action === "unlike") {
+      await BlobStorage.removeLike(mediaId.trim(), userId.trim())
+    } else {
+      await BlobStorage.addLike({
+        mediaId: mediaId.trim(),
+        userId: userId.trim(),
+        userName: userName.trim(),
+      })
+    }
+
+    const likes = await BlobStorage.getLikes(mediaId)
+    return NextResponse.json({ likes, count: likes.length })
   } catch (error) {
     console.error("Error updating like:", error)
     return NextResponse.json({ error: "Failed to update like" }, { status: 500 })
-  } finally {
-    await client.end()
   }
 }
