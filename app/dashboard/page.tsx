@@ -81,7 +81,9 @@ export default function DashboardPage() {
   useEffect(() => {
     const currentUser = localStorage.getItem("currentUser")
     if (currentUser) {
-      setUser(JSON.parse(currentUser))
+      const userData = JSON.parse(currentUser)
+      setUser(userData)
+      console.log("Current user loaded:", userData)
     } else {
       router.push("/")
     }
@@ -98,7 +100,9 @@ export default function DashboardPage() {
 
     const likesPromises = media.map(async (item) => {
       try {
-        const response = await fetch(`/api/media/likes?mediaId=${item.id}&userId=${user.id}`)
+        const response = await fetch(
+          `/api/media/likes?mediaId=${encodeURIComponent(item.id)}&userId=${encodeURIComponent(user.id)}`,
+        )
         if (response.ok) {
           const data = await response.json()
           return { id: item.id, count: data.count, userLiked: data.userLiked }
@@ -111,10 +115,10 @@ export default function DashboardPage() {
 
     const commentsPromises = media.map(async (item) => {
       try {
-        const response = await fetch(`/api/media/comments?mediaId=${item.id}`)
+        const response = await fetch(`/api/media/comments?mediaId=${encodeURIComponent(item.id)}`)
         if (response.ok) {
           const data = await response.json()
-          return { id: item.id, count: data.comments.length }
+          return { id: item.id, count: data.comments?.length || 0 }
         }
       } catch (error) {
         console.error("Error fetching comments:", error)
@@ -148,6 +152,7 @@ export default function DashboardPage() {
     toast({
       title: "Signed out",
       description: "You have been signed out successfully.",
+      duration: 2000,
     })
     router.push("/")
   }
@@ -184,6 +189,7 @@ export default function DashboardPage() {
           toast({
             title: "Upload successful",
             description: `${files.length} file${files.length > 1 ? "s" : ""} uploaded successfully`,
+            duration: 3000,
           })
         }, 1000)
       } catch (error) {
@@ -192,6 +198,7 @@ export default function DashboardPage() {
           title: "Upload failed",
           description: "There was an error uploading your files",
           variant: "destructive",
+          duration: 3000,
         })
       }
     }
@@ -219,6 +226,7 @@ export default function DashboardPage() {
         title: "Download failed",
         description: "There was an error downloading the file",
         variant: "destructive",
+        duration: 3000,
       })
     }
   }
@@ -236,6 +244,7 @@ export default function DashboardPage() {
         body: JSON.stringify({
           mediaId,
           userId: user.id,
+          userName: user.name,
           action,
         }),
       })
@@ -262,6 +271,7 @@ export default function DashboardPage() {
         title: "Error",
         description: "Failed to update like",
         variant: "destructive",
+        duration: 3000,
       })
     }
   }
@@ -272,6 +282,7 @@ export default function DashboardPage() {
   }
 
   const handleViewComments = (mediaItem: any) => {
+    console.log("Opening comments for media:", mediaItem)
     setSelectedMediaForComments(mediaItem)
     setIsCommentsModalOpen(true)
   }
@@ -282,6 +293,7 @@ export default function DashboardPage() {
     toast({
       title: "Profile updated",
       description: "Your profile has been updated successfully",
+      duration: 2000,
     })
   }
 
@@ -337,7 +349,7 @@ export default function DashboardPage() {
               <Avatar className="h-10 w-10">
                 <AvatarImage src={user.profilePicture || "/placeholder.svg"} alt={user.name} />
                 <AvatarFallback className="bg-gradient-to-r from-gray-700 via-slate-600 to-red-800 text-white">
-                  {user.name.charAt(0).toUpperCase()}
+                  {user.name?.charAt(0)?.toUpperCase() || "U"}
                 </AvatarFallback>
               </Avatar>
             </Button>
@@ -486,6 +498,7 @@ export default function DashboardPage() {
                       {/* Uploader Info */}
                       <div className="flex items-center gap-2 mb-3">
                         <Avatar className="h-6 w-6">
+                          <AvatarImage src={user.profilePicture || "/placeholder.svg"} />
                           <AvatarFallback className="bg-gradient-to-r from-gray-700 via-slate-600 to-red-800 text-white text-xs">
                             {mediaItem.uploadedBy?.charAt(0)?.toUpperCase() || "U"}
                           </AvatarFallback>

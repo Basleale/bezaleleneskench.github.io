@@ -27,10 +27,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Return user without password hash
-    const { passwordHash: _, ...userWithoutPassword } = user
-    return NextResponse.json({ user: userWithoutPassword })
+    const { passwordHash: _, ...safeUser } = user
+    return NextResponse.json({ user: safeUser })
   } catch (error) {
-    console.error("Error signing in user:", error)
+    console.error("Error signing in:", error)
     return NextResponse.json({ error: "Failed to sign in" }, { status: 500 })
   }
 }

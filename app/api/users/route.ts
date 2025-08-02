@@ -5,18 +5,32 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const search = searchParams.get("search")
+    const currentUserId = searchParams.get("currentUserId")
 
-    const users = await BlobStorage.getUsers()
-    
-    if (search && search.trim()) {
-      const filteredUsers = users.filter(user => 
-        user.name.toLowerCase().includes(search.toLowerCase()) ||
-        user.email.toLowerCase().includes(search.toLowerCase())
-      )
-      return NextResponse.json({ users: filteredUsers })
+    let users = await BlobStorage.getUsers()
+
+    // Filter out current user
+    if (currentUserId) {
+      users = users.filter((user) => user.id !== currentUserId)
     }
 
-    return NextResponse.json({ users })
+    // Filter by search term
+    if (search && search.trim()) {
+      const searchTerm = search.toLowerCase()
+      users = users.filter(
+        (user) => user.name.toLowerCase().includes(searchTerm) || user.email.toLowerCase().includes(searchTerm),
+      )
+    }
+
+    // Remove sensitive data
+    const safeUsers = users.map((user) => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      profilePicture: user.profilePicture,
+    }))
+
+    return NextResponse.json({ users: safeUsers })
   } catch (error) {
     console.error("Error fetching users:", error)
     return NextResponse.json({ error: "Failed to fetch users" }, { status: 500 })

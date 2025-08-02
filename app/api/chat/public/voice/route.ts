@@ -14,22 +14,23 @@ export async function POST(request: NextRequest) {
     }
 
     if (!senderId || !senderId.trim()) {
-      return NextResponse.json({ error: "Sender ID required" }, { status: 400 })
+      return NextResponse.json({ error: "Valid Sender ID required" }, { status: 400 })
     }
 
     if (!senderName || !senderName.trim()) {
-      return NextResponse.json({ error: "Sender name required" }, { status: 400 })
+      return NextResponse.json({ error: "Valid Sender Name required" }, { status: 400 })
     }
 
-    // Upload audio file to blob storage
-    const audioId = `voice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    const audioBlob = await put(`voice-messages/public/${audioId}.webm`, audioFile, {
+    // Upload audio to blob storage
+    const timestamp = Date.now()
+    const filename = `voice-public-${timestamp}-${Math.random().toString(36).substr(2, 9)}.webm`
+    const blob = await put(filename, audioFile, {
       access: "public",
     })
 
-    // Create message record
+    // Create message with voice URL
     const message = await BlobStorage.addPublicMessage({
-      voiceUrl: audioBlob.url,
+      voiceUrl: blob.url,
       senderId: senderId.trim(),
       senderName: senderName.trim(),
       type: "voice",

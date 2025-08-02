@@ -13,25 +13,25 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { content, senderId, senderName } = await request.json()
-
-    if (!content || !content.trim()) {
-      return NextResponse.json({ error: "Message content required" }, { status: 400 })
-    }
+    const { content, senderId, senderName, type = "text" } = await request.json()
 
     if (!senderId || !senderId.trim()) {
-      return NextResponse.json({ error: "Sender ID required" }, { status: 400 })
+      return NextResponse.json({ error: "Valid Sender ID required" }, { status: 400 })
     }
 
     if (!senderName || !senderName.trim()) {
-      return NextResponse.json({ error: "Sender name required" }, { status: 400 })
+      return NextResponse.json({ error: "Valid Sender Name required" }, { status: 400 })
+    }
+
+    if (type === "text" && (!content || !content.trim())) {
+      return NextResponse.json({ error: "Message content required" }, { status: 400 })
     }
 
     const message = await BlobStorage.addPublicMessage({
-      content: content.trim(),
+      content: content?.trim(),
       senderId: senderId.trim(),
       senderName: senderName.trim(),
-      type: "text",
+      type,
     })
 
     return NextResponse.json({ message })

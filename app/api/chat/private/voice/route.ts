@@ -16,30 +16,31 @@ export async function POST(request: NextRequest) {
     }
 
     if (!senderId || !senderId.trim()) {
-      return NextResponse.json({ error: "Sender ID required" }, { status: 400 })
+      return NextResponse.json({ error: "Valid Sender ID required" }, { status: 400 })
     }
 
     if (!senderName || !senderName.trim()) {
-      return NextResponse.json({ error: "Sender name required" }, { status: 400 })
+      return NextResponse.json({ error: "Valid Sender Name required" }, { status: 400 })
     }
 
     if (!receiverId || !receiverId.trim()) {
-      return NextResponse.json({ error: "Receiver ID required" }, { status: 400 })
+      return NextResponse.json({ error: "Valid Receiver ID required" }, { status: 400 })
     }
 
     if (!receiverName || !receiverName.trim()) {
-      return NextResponse.json({ error: "Receiver name required" }, { status: 400 })
+      return NextResponse.json({ error: "Valid Receiver Name required" }, { status: 400 })
     }
 
-    // Upload audio file to blob storage
-    const audioId = `voice_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    const audioBlob = await put(`voice-messages/private/${audioId}.webm`, audioFile, {
+    // Upload audio to blob storage
+    const timestamp = Date.now()
+    const filename = `voice-private-${timestamp}-${Math.random().toString(36).substr(2, 9)}.webm`
+    const blob = await put(filename, audioFile, {
       access: "public",
     })
 
-    // Create message record
+    // Create message with voice URL
     const message = await BlobStorage.addPrivateMessage({
-      voiceUrl: audioBlob.url,
+      voiceUrl: blob.url,
       senderId: senderId.trim(),
       senderName: senderName.trim(),
       receiverId: receiverId.trim(),
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ message })
   } catch (error) {
-    console.error("Error creating private voice message:", error)
+    console.error("Error creating voice message:", error)
     return NextResponse.json({ error: "Failed to create voice message" }, { status: 500 })
   }
 }

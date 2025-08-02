@@ -35,8 +35,8 @@ export async function POST(request: NextRequest) {
     })
 
     // Return user without password hash
-    const { passwordHash: _, ...userWithoutPassword } = user
-    return NextResponse.json({ user: userWithoutPassword })
+    const { passwordHash: _, ...safeUser } = user
+    return NextResponse.json({ user: safeUser })
   } catch (error) {
     console.error("Error creating user:", error)
     return NextResponse.json({ error: "Failed to create user" }, { status: 500 })

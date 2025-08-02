@@ -6,19 +6,19 @@ import { useState, useEffect, useRef } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useToast } from "@/hooks/use-toast"
-import { Send, Mic, MicOff, Play, Pause, Loader2, Globe } from "lucide-react"
+import { Send, Mic, MicOff, Loader2, Globe, Play, Pause } from "lucide-react"
 
 interface Message {
   id: string
   content?: string
   voiceUrl?: string
-  senderName: string
   senderId: string
-  createdAt: string
+  senderName: string
   type: "text" | "voice"
+  createdAt: string
 }
 
 interface PublicChatModalProps {
@@ -33,32 +33,28 @@ export function PublicChatModal({ isOpen, onClose, currentUser }: PublicChatModa
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
-  const [playingAudio, setPlayingAudio] = useState<string | null>(null)
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null)
-  const [audioChunks, setAudioChunks] = useState<Blob[]>([])
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [playingAudio, setPlayingAudio] = useState<string | null>(null)
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
   const { toast } = useToast()
 
   useEffect(() => {
-    if (isOpen && currentUser) {
+    if (isOpen) {
       fetchMessages()
       // Auto-refresh messages every 2 seconds
       const interval = setInterval(fetchMessages, 2000)
       return () => clearInterval(interval)
     }
-  }, [isOpen, currentUser])
+  }, [isOpen])
 
   useEffect(() => {
-    scrollToBottom()
+    // Scroll to bottom when new messages arrive
+    if (scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight
+    }
   }, [messages])
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }
-
   const fetchMessages = async () => {
-    if (!currentUser) return
-
     setLoading(true)
     try {
       const response = await fetch("/api/chat/public")
@@ -82,9 +78,9 @@ export function PublicChatModal({ isOpen, onClose, currentUser }: PublicChatModa
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          content: newMessage.trim(),
           senderId: currentUser.id,
           senderName: currentUser.name,
-          content: newMessage.trim(),
           type: "text",
         }),
       })
@@ -100,6 +96,7 @@ export function PublicChatModal({ isOpen, onClose, currentUser }: PublicChatModa
         title: "Error",
         description: "Failed to send message",
         variant: "destructive",
+        duration: 3000,
       })
     } finally {
       setSending(false)
@@ -110,17 +107,12 @@ export function PublicChatModal({ isOpen, onClose, currentUser }: PublicChatModa
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const recorder = new MediaRecorder(stream)
+      const chunks: BlobPart[] = []
 
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          setAudioChunks((prev) => [...prev, event.data])
-        }
-      }
-
+      recorder.ondataavailable = (e) => chunks.push(e.data)
       recorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunks, { type: "audio/webm" })
-        await sendVoiceMessage(audioBlob)
-        setAudioChunks([])
+        const blob = new Blob(chunks, { type: "audio/webm" })
+        await sendVoiceMessage(blob)
         stream.getTracks().forEach((track) => track.stop())
       }
 
@@ -132,6 +124,7 @@ export function PublicChatModal({ isOpen, onClose, currentUser }: PublicChatModa
         title: "Error",
         description: "Could not access microphone",
         variant: "destructive",
+        duration: 3000,
       })
     }
   }
@@ -150,7 +143,7 @@ export function PublicChatModal({ isOpen, onClose, currentUser }: PublicChatModa
     setSending(true)
     try {
       const formData = new FormData()
-      formData.append("audio", audioBlob, "voice-message.webm")
+      formData.append("audio", audioBlob)
       formData.append("senderId", currentUser.id)
       formData.append("senderName", currentUser.name)
 
@@ -169,6 +162,7 @@ export function PublicChatModal({ isOpen, onClose, currentUser }: PublicChatModa
         title: "Error",
         description: "Failed to send voice message",
         variant: "destructive",
+        duration: 3000,
       })
     } finally {
       setSending(false)
@@ -177,6 +171,7 @@ export function PublicChatModal({ isOpen, onClose, currentUser }: PublicChatModa
 
   const playAudio = (audioUrl: string, messageId: string) => {
     if (playingAudio === messageId) {
+      // Stop current audio
       setPlayingAudio(null)
       return
     }
@@ -205,72 +200,62 @@ export function PublicChatModal({ isOpen, onClose, currentUser }: PublicChatModa
         </DialogHeader>
 
         {/* Messages */}
-        <ScrollArea className="flex-1 max-h-96 mb-4">
+        <ScrollArea className="flex-1 max-h-96 mb-4" ref={scrollAreaRef}>
           {loading && messages.length === 0 ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
             </div>
           ) : messages.length === 0 ? (
             <div className="text-center py-8 text-gray-400">
+              <Globe className="h-12 w-12 mx-auto mb-2 opacity-50" />
               <p>No messages yet</p>
               <p className="text-sm">Start the conversation!</p>
             </div>
           ) : (
             <div className="space-y-4">
-              {messages.map((message) => {
-                const isOwn = message.senderId === currentUser?.id
-                return (
-                  <div key={message.id} className={`flex gap-3 ${isOwn ? "flex-row-reverse" : ""}`}>
-                    <Avatar className="h-8 w-8 flex-shrink-0">
-                      <AvatarFallback className="bg-gradient-to-r from-gray-700 via-slate-600 to-red-800 text-white text-xs">
-                        {message.senderName.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className={`flex-1 min-w-0 ${isOwn ? "text-right" : ""}`}>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-sm text-purple-400">
-                          {isOwn ? "You" : message.senderName}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {new Date(message.createdAt).toLocaleTimeString()}
-                        </span>
-                      </div>
-                      {message.type === "text" ? (
-                        <div
-                          className={`inline-block p-3 rounded-lg max-w-xs ${
-                            isOwn ? "bg-purple-600 text-white" : "bg-gray-700 text-gray-300"
-                          }`}
-                        >
-                          <p className="text-sm break-words">{message.content}</p>
-                        </div>
-                      ) : (
-                        <div
-                          className={`inline-block p-3 rounded-lg ${
-                            isOwn ? "bg-purple-600 text-white" : "bg-gray-700 text-gray-300"
-                          }`}
-                        >
-                          <Button
-                            onClick={() => playAudio(message.voiceUrl!, message.id)}
-                            size="sm"
-                            variant="ghost"
-                            className="text-white hover:bg-white/20"
-                          >
-                            {playingAudio === message.id ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                            <span className="ml-2 text-xs">Voice message</span>
-                          </Button>
-                        </div>
-                      )}
+              {messages.map((message) => (
+                <div key={message.id} className="flex gap-3">
+                  <Avatar className="h-8 w-8 flex-shrink-0">
+                    <AvatarImage src={currentUser?.profilePicture || "/placeholder.svg"} />
+                    <AvatarFallback className="bg-gradient-to-r from-gray-700 via-slate-600 to-red-800 text-white text-xs">
+                      {message.senderName?.charAt(0)?.toUpperCase() || "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-medium text-sm text-purple-400">{message.senderName}</span>
+                      <span className="text-xs text-gray-500">{new Date(message.createdAt).toLocaleString()}</span>
                     </div>
+                    {message.type === "text" ? (
+                      <p className="text-gray-300 text-sm break-words">{message.content}</p>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          onClick={() => playAudio(message.voiceUrl!, message.id)}
+                          size="sm"
+                          variant="outline"
+                          className="border-gray-600 text-gray-300 hover:bg-gray-700"
+                        >
+                          {playingAudio === message.id ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                        </Button>
+                        <span className="text-gray-400 text-xs">Voice message</span>
+                      </div>
+                    )}
                   </div>
-                )
-              })}
-              <div ref={messagesEndRef} />
+                </div>
+              ))}
             </div>
           )}
         </ScrollArea>
 
         {/* Message Input */}
         <div className="flex gap-2">
+          <Avatar className="h-8 w-8 flex-shrink-0">
+            <AvatarImage src={currentUser?.profilePicture || "/placeholder.svg"} />
+            <AvatarFallback className="bg-gradient-to-r from-gray-700 via-slate-600 to-red-800 text-white text-xs">
+              {currentUser?.name?.charAt(0)?.toUpperCase() || "U"}
+            </AvatarFallback>
+          </Avatar>
           <div className="flex-1 flex gap-2">
             <Input
               placeholder="Type a message..."
@@ -281,22 +266,25 @@ export function PublicChatModal({ isOpen, onClose, currentUser }: PublicChatModa
               disabled={sending || isRecording}
             />
             <Button
+              onClick={isRecording ? stopRecording : startRecording}
+              size="sm"
+              variant="outline"
+              className={`border-gray-600 ${
+                isRecording ? "text-red-400 border-red-400" : "text-gray-300 hover:bg-gray-700"
+              }`}
+              disabled={sending}
+            >
+              {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            </Button>
+            <Button
               onClick={handleSendMessage}
-              disabled={!newMessage.trim() || sending}
+              disabled={!newMessage.trim() || sending || isRecording}
               size="sm"
               className="bg-purple-600 hover:bg-purple-700"
             >
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>
-          <Button
-            onClick={isRecording ? stopRecording : startRecording}
-            size="sm"
-            variant={isRecording ? "destructive" : "outline"}
-            className={isRecording ? "animate-pulse" : ""}
-          >
-            {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-          </Button>
         </div>
       </DialogContent>
     </Dialog>

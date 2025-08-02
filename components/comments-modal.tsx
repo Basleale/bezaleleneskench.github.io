@@ -44,14 +44,17 @@ export function CommentsModal({ isOpen, onClose, mediaItem, currentUser, onComme
   }, [isOpen, mediaItem])
 
   const fetchComments = async () => {
-    if (!mediaItem) return
+    if (!mediaItem?.id) return
 
     setLoading(true)
     try {
-      const response = await fetch(`/api/media/comments?mediaId=${mediaItem.id}`)
+      const response = await fetch(`/api/media/comments?mediaId=${encodeURIComponent(mediaItem.id)}`)
       if (response.ok) {
         const data = await response.json()
+        console.log("Fetched comments:", data.comments)
         setComments(data.comments || [])
+      } else {
+        console.error("Failed to fetch comments:", response.status)
       }
     } catch (error) {
       console.error("Error fetching comments:", error)
@@ -61,7 +64,7 @@ export function CommentsModal({ isOpen, onClose, mediaItem, currentUser, onComme
   }
 
   const handleSubmitComment = async () => {
-    if (!newComment.trim() || !currentUser || !mediaItem) return
+    if (!newComment.trim() || !currentUser || !mediaItem?.id) return
 
     setSubmitting(true)
     try {
@@ -77,21 +80,29 @@ export function CommentsModal({ isOpen, onClose, mediaItem, currentUser, onComme
       })
 
       if (response.ok) {
+        const data = await response.json()
+        console.log("Comment added:", data.comment)
         setNewComment("")
-        fetchComments() // Refresh comments
+        // Add the new comment to the local state immediately
+        setComments((prev) => [...prev, data.comment])
         onCommentAdded()
+
+        // Show success toast that disappears quickly
         toast({
           title: "Comment added",
           description: "Your comment has been posted successfully",
+          duration: 2000, // 2 seconds
         })
       } else {
         throw new Error("Failed to post comment")
       }
     } catch (error) {
+      console.error("Error posting comment:", error)
       toast({
         title: "Error",
         description: "Failed to post comment",
         variant: "destructive",
+        duration: 3000,
       })
     } finally {
       setSubmitting(false)
@@ -113,7 +124,7 @@ export function CommentsModal({ isOpen, onClose, mediaItem, currentUser, onComme
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MessageCircle className="h-5 w-5 text-blue-400" />
-            Comments
+            Comments ({comments.length})
           </DialogTitle>
         </DialogHeader>
 
@@ -144,6 +155,7 @@ export function CommentsModal({ isOpen, onClose, mediaItem, currentUser, onComme
             </div>
           ) : comments.length === 0 ? (
             <div className="text-center py-8 text-gray-400">
+              <MessageCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
               <p>No comments yet</p>
               <p className="text-sm">Be the first to comment!</p>
             </div>
@@ -153,7 +165,7 @@ export function CommentsModal({ isOpen, onClose, mediaItem, currentUser, onComme
                 <div key={comment.id} className="flex gap-3">
                   <Avatar className="h-8 w-8 flex-shrink-0">
                     <AvatarFallback className="bg-gradient-to-r from-gray-700 via-slate-600 to-red-800 text-white text-xs">
-                      {comment.userName.charAt(0).toUpperCase()}
+                      {comment.userName?.charAt(0)?.toUpperCase() || "U"}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
